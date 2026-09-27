@@ -1,6 +1,6 @@
 # SuperSaaS slots MCP server
 
-A read-only, dependency-free Python MCP server for public **resource** schedules with one resource and explicit numeric start times. It downloads the public schedule page, extracts `rp_id`, `token`, `bit_prefs`, `open_times`, appointment duration, buffer, and start-time constraints, then calls `/ajax/resource/<rp_id>` in 28-day windows. No account or API key is needed for the tested public page.
+A read-only, dependency-free Python MCP server for public **resource** schedules with one resource and explicit numeric start times. It downloads the public schedule page, extracts `rp_id`, `token`, `bit_prefs`, `open_times`, appointment duration, buffer, and start-time constraints, then calls `/ajax/resource/<rp_id>` in 28-day windows. Each call explicitly requests the exception list with `efrom`, `eto`, and `ed=r`. No account or API key is needed for the tested public page.
 
 ## Connect
 
@@ -37,9 +37,11 @@ Times are returned as schedule wall-clock strings (`YYYY-MM-DD HH:MM`). The sche
 
 For the saved October fixture, the week of October 19 has one free slot: **October 22, 09:30–12:30**. Monday is closed by the low seven bits of `bit_prefs` (`0b1111001`, Sunday first). The October 13 Tuesday exception opens 09:30–12:30.
 
+SuperSaaS selects exception rows by their **start date**. To catch a blocked range that began before the requested window, the AJAX query sets `efrom=1970-01-01` while keeping `eto` at the window's end. Exception type `0` blocks all overlapping dates; type `1` adds the listed opening interval. For example, the live response contains a type `0` block from February 19 through February 28, 2027, so the week of February 22 has **no available slots**.
+
 ## Scope
 
-This server handles the tested resource-schedule shape: one resource, fixed duration, up to two daily opening periods, explicit numeric start times, weekday enable bits, one opening-hours exception per day, booked appointments, and buffer time. It rejects schedules advertising clustering, synchronization, or complex linked rules. Other SuperSaaS schedule types, recurring rule patterns, per-user limits, and payment-dependent availability are not modeled. An available slot is a calculated candidate, not a booking guarantee; the booking page remains authoritative at reservation time.
+This server handles the tested resource-schedule shape: one resource, fixed duration, up to two daily opening periods, explicit numeric start times, weekday enable bits, additive opening exceptions, blocked ranges, booked appointments, and buffer time. It rejects schedules advertising clustering, synchronization, or complex linked rules. Other SuperSaaS schedule types, recurring rule patterns, per-user limits, and payment-dependent availability are not modeled. An available slot is a calculated candidate, not a booking guarantee; the booking page remains authoritative at reservation time.
 
 ## Test
 

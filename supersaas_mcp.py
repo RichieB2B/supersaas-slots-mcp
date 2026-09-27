@@ -119,7 +119,9 @@ def ajax_url(schedule: Schedule, start: date, stop: date) -> str:
     values = {
         "v": "12", "token": str(schedule.token),
         "afrom": start.isoformat() + " 00:00", "ato": stop.isoformat() + " 00:00",
-        "ad": "r", "efrom": start.isoformat(), "eto": stop.isoformat(), "ed": "r",
+        # SuperSaaS selects exceptions by their START date, even when a blocked
+        # range began before `start` and still overlaps the requested dates.
+        "ad": "r", "efrom": "1970-01-01", "eto": stop.isoformat(), "ed": "r",
     }
     origin = urlsplit(schedule.page_url)
     return f"{origin.scheme}://{origin.netloc}/ajax/resource/{schedule.rp_id}?{urlencode(values)}"
@@ -127,25 +129,26 @@ def ajax_url(schedule: Schedule, start: date, stop: date) -> str:
 
 def _periods(schedule: Schedule, day: date, exceptions: list[list]) -> list[tuple[int, int]]:
     day_start = int(datetime(day.year, day.month, day.day, tzinfo=timezone.utc).timestamp())
-    if any(not isinstance(row, list) or len(row) < 5 for row in exceptions):
+    if any(not isinstance(row, list) or len(row) < 3 for row in exceptions):
         raise ScheduleError("Malformed exception in AJAX response.")
     relevant = [row for row in exceptions if row[0] < day_start + 86400 and row[1] > day_start]
-    if len(relevant) > 1:
-        raise ScheduleError(f"Overlapping exceptions on {day} are not supported.")
-    if relevant:
-        row = relevant[0]
-        if len(row) < 5 or row[2] != 1:
-            raise ScheduleError(f"Unsupported exception on {day}: {row!r}")
-        a, b = row[3], row[4]
-        return [(a, b)] if a is not None and b is not None and a < b else []
-    weekday = (day.weekday() + 1) % 7  # Sunday = bit 0.
-    if not (schedule.bit_prefs & (1 << weekday)):
+    if any(row[2] not in (0, 1) or (row[2] == 1 and len(row) < 5) for row in relevant):
+        raise ScheduleError(f"Unsupported exception on {day}.")
+    if any(row[2] == 0 for row in relevant):
         return []
+    weekday = (day.weekday() + 1) % 7  # Sunday = bit 0.
     periods = []
-    for offset in (0, 14):
-        a = schedule.open_times[offset + weekday]
-        b = schedule.open_times[offset + 7 + weekday]
-        if a is not None and b is not None and a < b:
+    if schedule.bit_prefs & (1 << weekday):
+        for offset in (0, 14):
+            a = schedule.open_times[offset + weekday]
+            b = schedule.open_times[offset + 7 + weekday]
+            if a is not None and b is not None and a < b:
+                periods.append((a, b))
+    for row in relevant:
+        if row[2] == 1:
+            a, b = row[3], row[4]
+            if type(a) is not int or type(b) is not int or not (0 <= a < b <= 1440):
+                raise ScheduleError(f"Invalid opening exception on {day}.")
             periods.append((a, b))
     return periods
 

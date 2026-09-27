@@ -43,10 +43,25 @@ class ScheduleTests(unittest.TestCase):
             {"start": "2026-10-13 09:30", "end": "2026-10-13 12:30"}
         ])
 
+    def test_block_started_before_requested_week_closes_every_day(self):
+        data = {"app": [], "exc": [[1802995200, 1803859170, 0]]}
+        slots = module.calculate_slots(self.schedule, data,
+                                       date(2027, 2, 22), date(2027, 3, 1), now=self.now)
+        self.assertEqual(slots, [])
+
+    def test_extra_opening_is_additive(self):
+        day = date(2026, 10, 21)  # An already-open Wednesday.
+        midnight = 1792540800
+        periods = module._periods(self.schedule, day,
+                                  [[midnight, midnight + 86370, 1, 60, 120]])
+        self.assertIn((570, 1320), periods)
+        self.assertIn((60, 120), periods)
+
     def test_url_matches_supplied_ajax_shape(self):
         url = module.ajax_url(self.schedule, date(2026, 10, 6), date(2026, 11, 3))
         self.assertIn("/ajax/resource/823084?v=12&token=1017954", url)
         self.assertIn("afrom=2026-10-06+00%3A00", url)
+        self.assertIn("efrom=1970-01-01", url)
         self.assertIn("ed=r", url)
 
     def test_stdio_handshake_and_tool_list(self):
