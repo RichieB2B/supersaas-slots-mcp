@@ -51,6 +51,18 @@ A 14- or 28-element array; the server pads to 28. For weekday `w`, the first per
 
 `resolve_schedule_url()` accepts either a SuperSaaS URL or a third-party page. For a third-party page it scans the HTML with `SCHEDULE_LINK` for links to `/schedule/...`, handling protocol-relative URLs and entities via `unescape()`. Zero or several matches is an error, and the several case lists the candidates so the caller can pick.
 
+### Links kept in JS bundles
+
+Single-page apps render an empty shell and keep the booking link in a bundled script, so the HTML scan finds nothing. `guistcreek.com/booking` is this shape: its link lives in `/assets/index-CPjZSA-J.js`. When the HTML yields no link, `links_from_scripts()` fetches the page's own scripts and scans them with the same regex, which already matches a URL inside a JS string literal.
+
+Three deliberate limits:
+
+- **Same origin only.** `same_origin_scripts()` resolves each `<script src>` against the page URL and keeps only those sharing the page's scheme and host. A customer's configuration cannot live in a third-party bundle, and this keeps the extra fetches inside the trust boundary of the page the caller named. SuperSaaS's own `cdn.supersaas.net/widget.js` is therefore skipped.
+- **At most `MAX_SCRIPTS` (10)**, deduplicated, each bounded by the existing `MAX_BYTES`.
+- **HTML wins.** Scripts are fetched only when the HTML yields nothing, so a conventional page costs what it always did. An unreachable script is skipped rather than aborting discovery, so one dead bundle cannot hide the link in the next.
+
+The widget endpoint itself is deliberately not supported. `https://www.supersaas.com/widget/index/633382/842100` does return a parseable resource page — the two ids are account and `rp_id` — but for GuistCreek it reports `filter=0` across 42 pitches, so it can only ever produce the "pick a resource" error, and the widget URL carries no resource names to recover. The bundle link resolves to the named schedule, which is the useful path.
+
 ### Host canonicalisation
 
 `www`, `m` (mobile) and `d` are mirrors: `www` and `d` return byte-identical bodies, and `m` returns a lighter page carrying the same configuration variables and the same parsed values. Every schedule URL therefore passes through `_canonical_schedule_url()`, which rewrites the host to `www.` and drops the query string and trailing slash, so the rest of the pipeline sees one shape and `schedule_url` in the response is stable.
@@ -96,7 +108,9 @@ Expansion is deduplicated and sorted. Grids are then filtered by that weekday's 
 
 ## Date-only schedules
 
-`rounding=86400` **and** `default_length >= 86400` means the product is whole days: nightly rentals, court hires. `House_1` is this shape. The server switches units and reports `unit: "night"`.
+`default_length == 86400` means the product is whole days: nightly rentals, marina pitches, court hires. The server switches units and reports `unit: "night"`. **`rounding` is not part of the test.** It was originally `rounding=86400 and default_length >= 86400`, which worked for `Rental_Homes/House_1` but wrongly rejected GuistCreek Marina, whose page sets `rounding=60` with the same 24-hour unit; all 36 of its live bookings are exact whole days starting at 15:00, confirming the unit is a night. `rounding` only sets the UI time-step and is irrelevant once the duration is a full day.
+
+A larger unit is rejected outright rather than approximated: `default_length` of 172800 is a two-day product, and the single-night arithmetic below would silently mis-report it.
 
 SuperSaaS hides both clock times in the same start-time constraints. `'720 840'` decodes to check-out 12:00 and check-in 14:00 — the **later** value is arrival, the earlier one is next-morning departure. `_night_times()` returns that pair; a single value makes a full 24-hour night; a repeat grid expands to more than two values and is rejected, since it carries no arrival/departure pair.
 
@@ -127,7 +141,7 @@ Each rejection exists because the alternative is a wrong answer rather than an e
 | `precalc_constraints('')` | No start-time grid | Visitors pick their own times, so there is no fixed grid to replay. |
 | No `open_times` at all | Behind a login | SuperSaaS returns HTTP **200** with a login stub, not a 4xx, so this presents as missing data. |
 | `open_times` but no `start` | No start times | Slots are generated from the request time; the server cannot replay them. |
-| `default_length >= 86400` without `rounding=86400` | Unsupported | The containment test would match nothing and return zero slots. |
+| `default_length` above 86400 | Multi-day unit | The night arithmetic covers one day, so a two-day product would be mis-reported. |
 | `open_times` length outside 14–28 | Unsupported layout | The two-period-per-day assumption breaks. |
 
 `add_limit` and `early_limit` of `0` mean *unlimited*, not *now* — matching the truthiness guards in SuperSaaS's own script. Treating `0` as a real limit would silently discard every slot on schedules that set neither, which is most public ones.

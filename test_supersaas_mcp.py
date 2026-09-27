@@ -302,15 +302,25 @@ class DiagnosticsTests(unittest.TestCase):
             module.parse_schedule(html, self.URL)
         self.assertIn("pick a resource", str(caught.exception))
 
-    def test_date_only_units_without_daily_rounding_are_still_rejected(self):
-        html = ("<script>var start=precalc_constraints('720 840'), rounding=60,"
+    def test_hourly_rounding_does_not_stop_a_24_hour_unit_being_date_only(self):
+        html = ("<script>var start=precalc_constraints('900'), rounding=60,"
                 "open_times=[0,0,0,0,0,0,0,1440,1440,1440,1440,1440,1440,1440],"
-                "cluster=0,complex=0,sync=false,filter=405725,rp_id=9,token=9,bit_prefs=126,"
+                "cluster=0,complex=0,sync=false,filter=1225905,rp_id=9,token=9,bit_prefs=126,"
                 "default_length=86400,buffer=0,add_limit=0,early_limit=0,"
-                "resource[405725]={data:[0,0,\"House_1\",5]}</script>")
+                "resource[1225905]={data:[0,0,\"Lot_101-40ft\",0]}</script>")
+        schedule = module.parse_schedule(html, self.URL)
+        self.assertTrue(schedule.date_only)
+        self.assertEqual((schedule.checkin_minute, schedule.checkout_minute), (900, 900))
+
+    def test_multi_day_units_are_rejected_rather_than_modelled_as_one_night(self):
+        html = ("<script>var start=precalc_constraints('900'), rounding=60,"
+                "open_times=[0,0,0,0,0,0,0,1440,1440,1440,1440,1440,1440,1440],"
+                "cluster=0,complex=0,sync=false,filter=1225905,rp_id=9,token=9,bit_prefs=126,"
+                "default_length=172800,buffer=0,add_limit=0,early_limit=0,"
+                "resource[1225905]={data:[0,0,\"Lot_101-40ft\",0]}</script>")
         with self.assertRaises(module.ScheduleError) as caught:
             module.parse_schedule(html, self.URL)
-        self.assertIn("without daily rounding", str(caught.exception))
+        self.assertIn("units of 2 days", str(caught.exception))
 
     def test_a_24_hour_unit_would_return_no_slots_so_the_guard_is_load_bearing(self):
         schedule = module.parse_schedule(
@@ -426,6 +436,68 @@ class NightTimeTests(unittest.TestCase):
                                        date(2026, 10, 5), date(2026, 10, 6),
                                        now=datetime(2026, 9, 27, tzinfo=timezone.utc))[0]
         self.assertEqual(night, {"start": "2026-10-05 12:00", "end": "2026-10-06 12:00"})
+
+
+class ScriptDiscoveryTests(unittest.TestCase):
+    PAGE_URL = "https://www.example-marina.test/booking"
+    SCHEDULE_URL = "https://www.supersaas.com/schedule/GuistCreekMarina/Pull_Through_RV_Sites"
+    BUNDLE = "https://www.example-marina.test/assets/index-CPjZSA-J.js"
+
+    def page(self, *sources):
+        return "".join(f'<script src="{s}"></script>' for s in sources)
+
+    def test_only_same_origin_script_sources_are_collected(self):
+        html = self.page("/assets/index-CPjZSA-J.js", self.BUNDLE,
+                         "https://cdn.supersaas.net/widget.js", "//other.test/x.js")
+        self.assertEqual(module.same_origin_scripts(html, self.PAGE_URL), (self.BUNDLE,))
+
+    def test_relative_and_duplicate_sources_resolve_once(self):
+        html = self.page("/assets/index-CPjZSA-J.js", "/assets/index-CPjZSA-J.js", self.BUNDLE)
+        self.assertEqual(module.same_origin_scripts(html, self.PAGE_URL), (self.BUNDLE,))
+
+    def test_inline_scripts_without_src_are_ignored(self):
+        self.assertEqual(module.same_origin_scripts("<script>var x=1</script>", self.PAGE_URL), ())
+
+    def test_scanning_stops_at_the_script_cap(self):
+        html = self.page(*[f"/assets/chunk{i}.js" for i in range(30)])
+        self.assertEqual(len(module.same_origin_scripts(html, self.PAGE_URL)), module.MAX_SCRIPTS)
+
+    def test_a_schedule_link_inside_a_bundle_is_found(self):
+        bundle = f'const k2="{self.SCHEDULE_URL}";new window.SuperSaaS("633382:GuistCreekMarina")'
+        self.assertEqual(module.find_schedule_links(bundle), (self.SCHEDULE_URL,))
+
+    def test_resolve_falls_back_to_the_bundle(self):
+        html = self.page("/assets/index-CPjZSA-J.js")
+        bundle = f'const u="{self.SCHEDULE_URL}";'
+        with mock.patch.object(module, "_get", side_effect=[
+                (html.encode(), self.PAGE_URL), (bundle.encode(), self.BUNDLE)]) as get:
+            self.assertEqual(module.resolve_schedule_url(self.PAGE_URL),
+                             (self.SCHEDULE_URL, self.PAGE_URL))
+        self.assertEqual([c.args[0] for c in get.call_args_list], [self.PAGE_URL, self.BUNDLE])
+
+    def test_an_html_link_is_used_without_fetching_scripts(self):
+        html = f'<a href="{self.SCHEDULE_URL}">book</a>' + self.page("/assets/a.js")
+        with mock.patch.object(module, "_get", return_value=(html.encode(), self.PAGE_URL)) as get:
+            self.assertEqual(module.resolve_schedule_url(self.PAGE_URL),
+                             (self.SCHEDULE_URL, self.PAGE_URL))
+        get.assert_called_once_with(self.PAGE_URL)
+
+    def test_an_unreachable_bundle_does_not_hide_a_later_link(self):
+        html = self.page("/assets/gone.js", "/assets/live.js")
+        with mock.patch.object(module, "_get", side_effect=[
+                (html.encode(), self.PAGE_URL), module.ScheduleError("404"),
+                (f'x="{self.SCHEDULE_URL}"'.encode(), "https://x")]) as get:
+            self.assertEqual(module.resolve_schedule_url(self.PAGE_URL),
+                             (self.SCHEDULE_URL, self.PAGE_URL))
+        self.assertEqual(get.call_count, 3)
+
+    def test_no_link_anywhere_still_raises(self):
+        html = self.page("/assets/a.js")
+        with mock.patch.object(module, "_get", side_effect=[
+                (html.encode(), self.PAGE_URL), (b"const x=1;", self.BUNDLE)]):
+            with self.assertRaises(module.ScheduleError) as caught:
+                module.resolve_schedule_url(self.PAGE_URL)
+        self.assertIn("No link", str(caught.exception))
 
 
 class ResponseShapeTests(unittest.TestCase):

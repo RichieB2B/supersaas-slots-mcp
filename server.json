@@ -3,7 +3,7 @@
   "name": "io.github.RichieB2B/supersaas-slots-mcp",
   "title": "SuperSaaS Slots",
   "description": "Find available appointments on public SuperSaaS resource schedules",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "repository": {
     "url": "https://github.com/RichieB2B/supersaas-slots-mcp",
     "source": "github"
@@ -12,7 +12,7 @@
     {
       "registryType": "pypi",
       "identifier": "supersaas-slots-mcp",
-      "version": "0.2.1",
+      "version": "0.3.0",
       "runtimeHint": "uvx",
       "transport": {
         "type": "stdio"

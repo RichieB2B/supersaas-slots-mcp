@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from html import unescape
 from typing import Annotated
-from urllib.parse import urlencode, urlsplit
+from urllib.parse import urlencode, urljoin, urlsplit
 from urllib.request import Request, urlopen
 
 from fastmcp import FastMCP
@@ -34,7 +34,9 @@ SCHEDULE_LINK = re.compile(
 )
 SCHEDULE_ASSET = re.compile(r"/assets/(resource|capacity|service)-[0-9a-f]{8,}\.js")
 TRAILING_PUNCTUATION = ".,;:!?'\""
-mcp = FastMCP("supersaas-slots", version="0.2.1")
+SCRIPT_SRC = re.compile(r"<script\b[^>]*?\bsrc\s*=\s*(['\"])(.+?)\1", re.IGNORECASE | re.DOTALL)
+MAX_SCRIPTS = 10
+mcp = FastMCP("supersaas-slots", version="0.3.0")
 
 
 class ScheduleError(ValueError):
@@ -139,18 +141,56 @@ def find_schedule_links(html: str) -> tuple[str, ...]:
     return tuple(links)
 
 
+def same_origin_scripts(html: str, page_url: str) -> tuple[str, ...]:
+    """Absolute URLs of ``<script src>`` files served from the page's own origin.
+
+    Bundler-based sites keep the schedule link in a JS asset rather than the
+    HTML, but the customer's own bundle is the only place worth looking: a
+    third-party script cannot carry this business's configuration, and staying
+    on the page's origin keeps the extra fetches inside the same trust boundary.
+    """
+    parts = urlsplit(page_url)
+    origin = (parts.scheme, parts.netloc)
+    found = []
+    for _, source in SCRIPT_SRC.findall(unescape(html)):
+        absolute = urljoin(page_url, source.strip())
+        candidate = urlsplit(absolute)
+        if (candidate.scheme, candidate.netloc) != origin or not candidate.path:
+            continue
+        if absolute not in found:
+            found.append(absolute)
+    return tuple(found[:MAX_SCRIPTS])
+
+
+def links_from_scripts(html: str, page_url: str) -> tuple[str, ...]:
+    """Collect schedule links from the scripts the page loads from its origin."""
+    links = []
+    for source in same_origin_scripts(html, page_url):
+        try:
+            body, _ = _get(source)
+        except ScheduleError:
+            continue
+        for link in find_schedule_links(body.decode("utf-8", "replace")):
+            if link not in links:
+                links.append(link)
+    return tuple(links)
+
+
 def resolve_schedule_url(url: str) -> tuple[str, str | None]:
     """Return the schedule URL for a SuperSaaS or third-party page.
 
     Third-party pages such as a salon website are fetched and scanned for a
-    link to a SuperSaaS schedule. The second result is that page's URL when a
-    link was followed, otherwise ``None``.
+    link to a SuperSaaS schedule. When the HTML names none, the page's own
+    scripts are scanned too, which is where bundler-based sites keep it. The
+    second result is that page's URL when a link was followed, otherwise
+    ``None``.
     """
     _validate_entry_url(url)
     if urlsplit(url).hostname in SCHEDULE_HOSTS:
         return _canonical_schedule_url(_validate_schedule_url(url)), None
     body, page_url = _get(url)
-    links = find_schedule_links(body.decode("utf-8", "replace"))
+    text = body.decode("utf-8", "replace")
+    links = find_schedule_links(text) or links_from_scripts(text, page_url)
     if not links:
         raise ScheduleError("No link to a supersaas.nl or supersaas.com /schedule/ page here.")
     if len(links) > 1:
@@ -338,17 +378,18 @@ def parse_schedule(html: str, page_url: str) -> Schedule | CapacitySchedule:
     if not re.search(r"resource\[" + str(resource_id) + r"\]", source):
         raise ScheduleError("Could not identify a single resource on this page.")
     duration = _number(source, "default_length")
-    date_only = rounding == DAILY_ROUNDING and duration >= DAILY_ROUNDING
+    if duration <= 0:
+        raise ScheduleError("Unsupported appointment duration.")
+    checkin = checkout = 0
+    date_only = duration == SECONDS_PER_DAY
     if date_only:
         checkin, checkout = _night_times(constraint_text)
         starts = ((checkin,),) * WEEKDAYS
-    elif duration >= DAILY_ROUNDING:
+    elif duration > SECONDS_PER_DAY:
         raise ScheduleError(
-            "This schedule uses 24-hour units without daily rounding, which "
-            "SuperSaaS does not combine; only sub-day durations are supported."
+            f"This schedule books in units of {duration // SECONDS_PER_DAY} days; only "
+            "single-day and sub-day units are supported."
         )
-    if duration <= 0:
-        raise ScheduleError("Unsupported appointment duration.")
     # On the observed resource page `buffer` is in minutes.
     buffer_minutes = _number(source, "buffer")
     if buffer_minutes < 0 or buffer_minutes > MINUTES_PER_DAY:
@@ -359,8 +400,7 @@ def parse_schedule(html: str, page_url: str) -> Schedule | CapacitySchedule:
         bit_prefs=_number(source, "bit_prefs"), open_times=tuple(open_times),
         starts=starts, duration_seconds=duration, buffer_seconds=buffer_minutes * 60,
         add_limit=_number(source, "add_limit"), early_limit=_number(source, "early_limit"),
-        date_only=date_only, checkin_minute=checkin if date_only else 0,
-        checkout_minute=checkout if date_only else 0,
+        date_only=date_only, checkin_minute=checkin, checkout_minute=checkout,
     )
 
 
