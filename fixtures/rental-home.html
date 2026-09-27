@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	
+	<title>Holiday Home Rental</title>
+	<meta name="robots" content="noindex">
+	<link rel="stylesheet" href="//assets.supersaas.net/assets/schedule_theme_5-7df56e32f08dd035aa71afaf2a08905fe479cc1bc3dcef4940c6e912013d2929.css" />
+		<script src="//assets.supersaas.net/assets/resource-890a7bda4d9f68cb1c2acb06c4aff3448891488d2e0f682e868e72c7c0365ca9.js"></script>
+<script>if (typeof(showflags)=='undefined') document.write('<script src="/assets/resource-890a7bda4d9f68cb1c2acb06c4aff3448891488d2e0f682e868e72c7c0365ca9.js"><\/script>')</script>
+
+<link rel="icon" href="https://cdn.supersaas.net/favicon.ico">  <style>
+					:root{--s1:#E7E7E7;--s3:#3B5180;--s4:#5D5D5D;--s6:#E7E7E7;--s7:#B8C7CF;--s8:#B7B7B7;}
+  </style>
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-WPGSKJLYC7"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  var consent=document.cookie.indexOf("consent=yes")> -1 || /ssrc=(100|2dd)/.test(document.cookie) ? 'granted' : 'denied'
+  gtag('consent', 'default', {'ad_storage': consent, 'analytics_storage': 'granted', 'ad_user_data': consent, 'ad_personalization': consent})
+  gtag('js', new Date());
+  gtag('config', 'G-WPGSKJLYC7')
+  if (/SS_keep=/.test(document.cookie)) {gtag('set','user_properties',{'role': 'Admin'});gtag('event', 'app', {'role': 'Admin','event_label':'Set role'})}
+  else {if (/SS_\d+_keep=/.test(document.cookie)) gtag('event', 'app', {'role': 'User','event_label':'Set role'});}
+</script></head>
+<body>
+<div class="header default_logo show_all"><div class="logo_w"><div id="head"><a href="/" id="logo_24" aria-label="Logo"></a></div></div><ul class="topmenu"><li></li> <li><a href="/schedule/help/demo/Rental_Homes?context=index&amp;return=%2Fschedule%2Fdemo%2FRental_Homes%2FHouse_1">Help</a></li></ul></div>
+<noscript><div class="c"><b>Warning:</b> You will need to enable JavaScript on your browser for this web site to work!</div></noscript>
+	<div class="breadcrumb">&nbsp;</div>
+<div id="wrap-schedule" class="wrap-resource">
+	<div id="usc"></div>
+	<div id="intro">
+		
+		<h1>Holiday Home Rental</h1>
+		<div id="message_box" data-user>
+				<div><p><img style="float:left;margin:0 20px 10px 0;max-width:200px;height:auto;border-radius:8px" src="//static.supersaas.net/demos/hotel_bed.jpg" alt="Hotel" width="205" height="138"></p>
+<p>In this example the dialog box automatically calculates the price for a reservation as you set the date. The price is $10 per day, with double prices on weekends. The system can also handle advanced pricing that takes into account the time left to book and the type of rental selected. For the purpose of this demonstration everyone can edit all reservations.</p>
+<p>You can also view this schedule on a <a href="https://m.supersaas.com/schedule/demo/Rental_Homes" title="Holiday Home Demo Mobile">mobile device</a></p>
+<p>Setup your own schedule with the help of our tutorial on how to create an <a href="/info/tutorials/accommodations_example">online booking system for an accommodation</a>.</p>
+<p><a href="/info/demos" target="_self">Leave demo</a></p></div>
+				
+			
+			<p class="flash"><span id="flash" style="display:none"></span></p>
+		</div>
+	</div>
+	<div id="legend"><div id="keytable"></div></div>
+	<div id="monthnav"></div>
+	<div id="tabContainer"></div>
+	<div id="agenda">
+		<i id="spin"></i><div id="noroom" style="display:none"></div><div id="viewholder"></div>
+	</div>
+</div>
+
+
+	<div class="dbox-w" id="oldres" style="display:none" role="dialog">
+		<div class="dbox-h dialoghead">
+			<span tabindex="-1">
+				<span id="oldres_edit">Edit Reservation</span>
+				<span id="oldres_view" style="display:none">View Reservation</span>
+			</span>
+			<a href="javascript:void(0)" onclick="hideDialog('oldres')" class="if if-times" aria-label="Close"></a>
+		</div>
+		<form action="/schedule/demo/Rental_Homes/House_1" accept-charset="UTF-8" method="post">
+			<div id="oldres_error"></div>
+
+			<div class="dbox-c">
+					<div class="dbox-form-c" >
+			<div>
+				<label for="oldres_start_time" title="When" class="fancy-label"><i class="if if-clock"></i><span>When</span></label>
+				<div>
+					<span class="dt-tm">
+						<input size="18" onfocus="show_datepick(this,0)" onblur="hide_datepick(this, false, true)" autocomplete="off" class="fancy-field" type="text" name="oldres[start_time]" id="oldres_start_time" />
+						<span id="oldres_startm" class="g"></span>
+					</span>
+					<label for="oldres_finish_time">to</label>
+					<span class="dt-tm">
+						<input size="18" onfocus="show_datepick(this,0)" onblur="hide_datepick(this, 86400)" autocomplete="off" class="fancy-field" type="text" name="oldres[finish_time]" id="oldres_finish_time" />
+						<span id="oldres_finishm" class="g"></span>
+					</span>
+				</div>
+			</div>
+
+		<div id="oldres_resr" style="display:none"><i class="if if-link" title="Service"></i><div id="oldres_res"></div></div>
+
+		
+		<div><label for="oldres_full_name" class="fancy-label"><i class="if if-user" title="Full name"></i><span>Full name</span></label><div><input size="30" maxlength="50" placeholder="Full name" class="fancy-field" type="text" name="oldres[full_name]" id="oldres_full_name" /></div></div>
+		
+		
+		
+		
+		
+	</div>
+
+	<div class="dbox-form-c form-custom">
+	
+	
+	<div><label for="oldres_field_1_r">Extras</label><div><select onchange="reprice(this.id)" name="oldres[field_1_r]" id="oldres_field_1_r"><option selected="selected" value="">None </option>
+<option value="Towel set +$5 per day">Towel set +$5 per day</option></select></div></div>
+	
+
+
+
+		<div><label for="oldres_resource_id">Rental Homes</label><div><select onchange="reprice(this.id)" name="oldres[resource_id]" id="oldres_resource_id"><option value="405725">House 1</option>
+<option value="405726">House 2</option></select></div></div>
+
+
+			<div>
+				<div><span class="label">Price</span></div>
+					<div><span id="oldres_price_cents"></span><span id="oldres_price"></span></div>
+			</div>
+
+		<div id="oldres_statrow" style="display:none">
+				<span class="label">
+						Status
+				</span>
+			<span id="oldres_status"></span>
+		</div>
+		<div>
+			<div id="oldrescreated_by" class="small full-width"><span>Created on</span> <span id="oldres_created_by"></span></div>
+			<div id="oldresupdated_by" class="small full-width" style="display:none"><span>Updated on</span> <span id="oldres_updated_by"></span></div>
+		</div>
+	</div>
+
+
+				
+
+				<div class="dbox-download">
+					<i class="id id-ical" title="Download reservation as iCalendar file" onclick="download_ical('oldres')"></i>
+				</div>
+			</div>
+
+			<div class="dbox-f">
+				<span id="oldres_editlink"><input type="hidden" name="oldres[id]" id="oldres_id" />
+					<button name="edit" type="submit" id="oldres_sedit" onclick="return showIndicator(this)" class="bttn">Update reservation</button>
+					<button name="destroy" type="submit" id="oldres_sdestroy" onclick="return removeRes(this)" class="bttn i-trash-w sq"><span>Delete reservation</span></button>
+				</span>
+				<a href="javascript:void(0)" onclick="hideDialog('oldres');" class="l-c">Close</a>
+				<span class="spin" style="display:none"></span>
+			</div>
+
+			<input type="hidden" name="oldres[xpos]" id="oldres_xpos" />
+			<input type="hidden" name="oldres[ypos]" id="oldres_ypos" />
+</form>	</div>
+
+
+
+	<div class="dbox-w" id="reservation" style="display:none" role="dialog">
+		<div class="dbox-h dialoghead">
+			<span class="res_title" tabindex="-1">New Reservation</span>
+			<a href="javascript:void(0)" onclick="hideDialog('reservation')" class="if if-times" aria-label="Close"></a>
+		</div>
+		<form action="/schedule/demo/Rental_Homes/House_1" accept-charset="UTF-8" method="post">
+			<div id="reservation_error" class="dbox-error"></div>
+			<div class="dbox-c">
+						<div class="dbox-form-c" >
+			<div>
+				<label for="reservation_start_time" title="When" class="fancy-label"><i class="if if-clock"></i><span>When</span></label>
+				<div>
+					<span class="dt-tm">
+						<input size="18" onfocus="show_datepick(this,0)" onblur="hide_datepick(this, false, true)" autocomplete="off" class="fancy-field" type="text" name="reservation[start_time]" id="reservation_start_time" />
+						<span id="reservation_startm" class="g"></span>
+					</span>
+					<label for="reservation_finish_time">to</label>
+					<span class="dt-tm">
+						<input size="18" onfocus="show_datepick(this,0)" onblur="hide_datepick(this, 86400)" autocomplete="off" class="fancy-field" type="text" name="reservation[finish_time]" id="reservation_finish_time" />
+						<span id="reservation_finishm" class="g"></span>
+					</span>
+				</div>
+			</div>
+
+		
+
+		
+		<div><label for="reservation_full_name" class="fancy-label"><i class="if if-user" title="Full name"></i><span>Full name</span></label><div><input size="30" maxlength="50" placeholder="Full name" class="fancy-field" type="text" name="reservation[full_name]" id="reservation_full_name" /></div></div>
+		
+		
+		
+		
+		
+	</div>
+
+	<div class="dbox-form-c form-custom">
+	
+	
+	<div><label for="reservation_field_1_r">Extras</label><div><select onchange="reprice(this.id)" name="reservation[field_1_r]" id="reservation_field_1_r"><option selected="selected" value="">None </option>
+<option value="Towel set +$5 per day">Towel set +$5 per day</option></select></div></div>
+	
+
+
+
+		<div><label for="reservation_resource_id">Rental Homes</label><div><select onchange="reprice(this.id)" name="reservation[resource_id]" id="reservation_resource_id"><option selected="selected" value="405725">House 1</option>
+<option value="405726">House 2</option></select></div></div>
+
+
+			<div>
+				<div><span class="label">Price</span></div>
+					<span id="reservation_price">&ndash;</span>
+			</div>
+
+	</div>
+
+
+										<div class="dbox-f">
+					<span>
+						<span class="spin" id="reservation_progress" style="display:none"></span>
+					</span>
+					<span>
+						<a href="javascript:void(0)" onclick="hideDialog('reservation');" class="bttn-ghost">Cancel</a>
+						<button name="button" type="submit" onclick="return showIndicator(this)" class="bttn">Create reservation</button>
+					</span>
+				</div>
+			</div>
+
+			<input type="hidden" name="reservation[xpos]" id="reservation_xpos" />
+			<input type="hidden" name="reservation[ypos]" id="reservation_ypos" />
+</form>	</div>
+
+
+
+<div id="pickholder"></div>
+
+<script>
+  
+  var cursor=new Date(Date.UTC(2026,8,27,0)),rp_id=134484,token=200224,view='month',auth_write=true,date_format=0,time_format=1,week_start=0,rounding=86400,default_length=86400,role=0,currency="$ ",price_format=0,price=1000,price_unit=86400,rules=[[3,10000,0,0,0,0,0,62],[9,1]],ugroup=0,time_here=new Date/1000-1790511831,local=false
+resource[405725]={data:[0,0,"House_1",5]}
+resource[405726]={data:[1,0,"House_2",8]}
+var filter=405725,start=precalc_constraints('720 840'),time_select=false,theme=5,orig_url="/schedule/demo/Rental_Homes/House_1"
+  var from_utc = [1805007600,-14400,1793512800,-18000,1772953200,-14400,1762063200,-18000,1741503600,-14400];
+  hotcell= 0
+  var chip_fields = ["full_name","field_1_r","price_cents"]
+  var app=[[1788184800,1788350400,405726,7695602,1,0,0,null,"",1788098400,"",0,"Fred White","","2000"],[1788444000,1788609600,405725,7695604,1,0,0,null,"",1788098400,"",0,"Martha Green","","2000"],[1788876000,1789041600,405726,7695605,1,0,0,null,"",1788098400,"",0,"Fred White","","2000"],[1788962400,1789041600,405725,26128968,1,0,0,null,"",1788098400,"",0,"","","1000"],[1789567200,1789646400,405725,30547439,1,0,0,null,0,1788098400,"",0,"Demonstration Company","","1000"],[1790172000,1790251200,405726,23377956,1,0,0,null,"",1788098400,"",0,"","","1000"],[1790258400,1790337600,405725,25101304,1,0,0,null,"",1788098400,"",0,"","","1000"],[1790604000,1790683200,405726,23377957,1,0,0,null,"",1788098400,"",0,"","","1000"]]
+</script>
+
+<script>
+  var add_limit = 0, early_limit = 0, early_snap = 0
+  var rp_name = "Rental_Homes", buffer = 0, unit_length = 3600, int_chk = 0
+  var sync = false
+  var first_hour = 0, last_hour = 24, season = [0,0]
+  var bit_prefs = 1811939390, open_times = [0,0,0,0,0,0,0,1440,1440,1440,1440,1440,1440,1440], cluster = 0, complex = 0
+  var ecache = {data: []}
+  var default_view = 0, time_unit = "hours", theme = 5, hide_finish = 0
+  var mdir = 2, grid_color = 0, full_color = 0
+  var hide_closed = 0, color_head = 1, month_nav = true
+  var mheight = 82, w_line_height = 52, interval = 2
+  var search_depth = 40, automes= "Click on an available spot to create a new reservation. ";
+    document.observe('dom:loaded', domloaded)
+</script>
+
+
+
+</body>
+</html>

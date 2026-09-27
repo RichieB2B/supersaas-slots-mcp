@@ -27,7 +27,7 @@ SCHEDULE_HOSTS = {"supersaas.nl", "www.supersaas.nl", "supersaas.com", "www.supe
 SCHEDULE_LINK = re.compile(
     r"(?:https?:)?//(?:www\.)?supersaas\.(?:nl|com)/schedule/[^\s\"'<>()]*", re.IGNORECASE
 )
-mcp = FastMCP("supersaas-slots", version="0.1.3")
+mcp = FastMCP("supersaas-slots", version="0.2.0")
 
 
 class ScheduleError(ValueError):
@@ -47,6 +47,9 @@ class Schedule:
     buffer_seconds: int
     add_limit: int
     early_limit: int
+    date_only: bool = False
+    checkin_minute: int = 0
+    checkout_minute: int = 0
 
 
 def _number(source: str, name: str) -> int:
@@ -185,6 +188,29 @@ def parse_constraints(text: str, rounding: int) -> tuple[tuple[int, ...], ...]:
     return tuple(days)
 
 
+def _clock(minute: int) -> str:
+    return f"{minute // 60:02d}:{minute % 60:02d}"
+
+
+def _night_times(text: str) -> tuple[int, int]:
+    """Return (check-in, check-out) minutes of day for a date-only schedule.
+
+    SuperSaaS stores both in the two start-time constraints of a daily-rounded
+    page: the later value is check-in and the earlier one is next-morning
+    check-out, so ``'720 840'`` means arrive 14:00 and leave 12:00. A single
+    value makes the unit a full 24 hours.
+    """
+    values = _constraint_list(text)
+    if len(values) == 1:
+        return values[0], values[0]
+    if len(values) != 2:
+        raise ScheduleError(
+            f"Cannot derive check-in and check-out from {len(values)} start times; "
+            "a date-only schedule declares one or two."
+        )
+    return values[1], values[0]
+
+
 def _missing_constraints_error(source: str) -> ScheduleError:
     if not re.search(r"\bopen_times\s*=", source):
         return ScheduleError(
@@ -203,7 +229,9 @@ def parse_schedule(html: str, page_url: str) -> Schedule:
     if not start_match:
         raise _missing_constraints_error(source)
     rounding = re.search(r"\brounding\s*=\s*(\d+)", source)
-    starts = parse_constraints(start_match.group(2), int(rounding.group(1)) if rounding else 0)
+    rounding = int(rounding.group(1)) if rounding else 0
+    constraint_text = start_match.group(2)
+    starts = parse_constraints(constraint_text, rounding)
     open_match = re.search(r"\bopen_times\s*=\s*(\[[^\]]*\])", source, re.S)
     if not open_match:
         raise ScheduleError("Schedule page does not expose open_times.")
@@ -228,10 +256,14 @@ def parse_schedule(html: str, page_url: str) -> Schedule:
     if not re.search(r"resource\[" + str(resource_id) + r"\]", source):
         raise ScheduleError("Could not identify a single resource on this page.")
     duration = _number(source, "default_length")
-    if duration >= DAILY_ROUNDING:
+    date_only = rounding == DAILY_ROUNDING and duration >= DAILY_ROUNDING
+    if date_only:
+        checkin, checkout = _night_times(constraint_text)
+        starts = ((checkin,),) * WEEKDAYS
+    elif duration >= DAILY_ROUNDING:
         raise ScheduleError(
-            "This is a date-only schedule with 24-hour units, such as a nightly rental; "
-            "only schedules with sub-day appointment durations are supported."
+            "This schedule uses 24-hour units without daily rounding, which "
+            "SuperSaaS does not combine; only sub-day durations are supported."
         )
     if duration <= 0:
         raise ScheduleError("Unsupported appointment duration.")
@@ -245,6 +277,8 @@ def parse_schedule(html: str, page_url: str) -> Schedule:
         bit_prefs=_number(source, "bit_prefs"), open_times=tuple(open_times),
         starts=starts, duration_seconds=duration, buffer_seconds=buffer_minutes * 60,
         add_limit=_number(source, "add_limit"), early_limit=_number(source, "early_limit"),
+        date_only=date_only, checkin_minute=checkin if date_only else 0,
+        checkout_minute=checkout if date_only else 0,
     )
 
 
@@ -307,10 +341,17 @@ def calculate_slots(schedule: Schedule, data: dict, start: date, stop: date,
         periods = _periods(schedule, day, exceptions)
         for minute in schedule.starts[_weekday(day)]:
             begin = midnight + minute * 60
-            finish = begin + schedule.duration_seconds
-            end_minute = minute + schedule.duration_seconds / 60
-            if not any(a <= minute and end_minute <= b for a, b in periods):
-                continue
+            if schedule.date_only:
+                # A night runs from check-in on this date to check-out the next,
+                # so it only needs the check-in date to be an open day.
+                if not periods:
+                    continue
+                finish = midnight + SECONDS_PER_DAY + schedule.checkout_minute * 60
+            else:
+                finish = begin + schedule.duration_seconds
+                end_minute = minute + schedule.duration_seconds / 60
+                if not any(a <= minute and end_minute <= b for a, b in periods):
+                    continue
             if respect_booking_window:
                 # SuperSaaS treats a zero limit as "no limit"; see the truthiness
                 # guards around add_limit and early_limit in its own page script.
@@ -330,6 +371,23 @@ def calculate_slots(schedule: Schedule, data: dict, start: date, stop: date,
     return slots
 
 
+def merge_stays(slots: list[dict]) -> list[dict]:
+    """Collapse consecutive free nights into bookable stays.
+
+    Nights are contiguous when the next check-in date equals the current
+    check-out date, so four free nights become one stay of four nights.
+    """
+    stays: list[dict] = []
+    for slot in slots:
+        check_in, check_out = slot["start"][:10], slot["end"][:10]
+        if stays and stays[-1]["end"] == check_in:
+            stays[-1]["end"] = check_out
+            stays[-1]["nights"] += 1
+        else:
+            stays.append({"start": check_in, "end": check_out, "nights": 1})
+    return stays
+
+
 @mcp.tool(annotations={"readOnlyHint": True, "openWorldHint": True})
 def find_available_slots(
     schedule_url: Annotated[str, Field(
@@ -346,8 +404,10 @@ def find_available_slots(
     links to exactly one schedule on supersaas.nl or supersaas.com, such as a
     salon's own booking page. Supports explicit, repeating-grid, and per-weekday
     start times, fixed duration, weekly opening hours, exceptions, booked
-    appointments, and booking-window limits. Unsupported schedule rules are
-    reported as errors.
+    appointments, buffer time, and booking-window limits. Date-only schedules
+    such as nightly rentals report whole nights from check-in to check-out and
+    add a `stays` summary of merged consecutive nights. Unsupported schedule
+    rules are reported as errors.
     """
     try:
         start = date.fromisoformat(from_date)
@@ -378,10 +438,15 @@ def find_available_slots(
     result = {
         "schedule_url": final_url, "from_date": from_date, "through_date": through_date,
         "time_basis": "schedule wall time; epoch values interpreted as UTC",
+        "unit": "night" if schedule.date_only else "slot",
         "duration_minutes": schedule.duration_seconds // 60,
         "count": len(all_slots), "truncated": len(all_slots) > max_results,
         "slots": all_slots[:max_results],
     }
+    if schedule.date_only:
+        result["check_in"] = _clock(schedule.checkin_minute)
+        result["check_out"] = _clock(schedule.checkout_minute)
+        result["stays"] = merge_stays(all_slots)
     if linked_from:
         result["linked_from"] = linked_from
     return result

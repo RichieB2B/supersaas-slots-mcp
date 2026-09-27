@@ -2,9 +2,9 @@
 
 <!-- mcp-name: io.github.RichieB2B/supersaas-slots-mcp -->
 
-A read-only FastMCP server for public **resource** schedules with one resource and declared start times. Give it either a SuperSaaS schedule URL or a business page that links to one, such as `https://www.down-the-hatch.nl/reserveren/`. It downloads the page, extracts `rp_id`, `token`, `bit_prefs`, `open_times`, appointment duration, buffer, and start-time constraints, then calls `/ajax/resource/<rp_id>` in 28-day windows. Each call explicitly requests the exception list with `efrom`, `eto`, and `ed=r`. No account or API key is needed for the tested public page.
+A read-only MCP server that reports which slots are free on a public SuperSaaS schedule. It covers both intraday appointment slots and date-only schedules such as nightly rentals. Give it a SuperSaaS schedule URL, or a business page that links to one, such as `https://www.down-the-hatch.nl/reserveren/`. No account or API key is needed.
 
-Licensed under the [MIT License](LICENSE).
+Licensed under the [MIT License](LICENSE). How the schedule data is read is documented in [INTERNALS.md](INTERNALS.md).
 
 ## Install
 
@@ -37,11 +37,24 @@ Configure a stdio MCP server in your MCP client:
 }
 ```
 
-Replace the command path with the absolute path to your project directory. The client must allow this local process to make HTTPS requests to `www.supersaas.nl` (or `www.supersaas.com`). FastMCP handles the stdio protocol; the availability calculation remains in `supersaas_mcp.py`.
+Replace the command path with the absolute path to your project directory. The client must allow this local process to make HTTPS requests to `www.supersaas.nl` (or `www.supersaas.com`).
+
+Or run it from PyPI with `uvx`:
+
+```json
+{
+  "mcpServers": {
+    "supersaas-slots": {
+      "command": "uvx",
+      "args": ["supersaas-slots-mcp"]
+    }
+  }
+}
+```
 
 ## Tool
 
-`find_available_slots` accepts:
+### `find_available_slots`
 
 ```json
 {
@@ -51,48 +64,75 @@ Replace the command path with the absolute path to your project directory. The c
 }
 ```
 
-`through_date` is inclusive. Optional `max_results` defaults to 500; the response includes the full `count` and `truncated` flag. Optional `respect_booking_window` defaults to `true` and applies the page's minimum and maximum advance-booking limits. A limit of `0` means unlimited, matching the truthiness guards in SuperSaaS's own page script, so a schedule that sets neither limit still returns future slots. Set `respect_booking_window` to `false` when examining historical schedule data.
+| Parameter | Default | Notes |
+| --- | --- | --- |
+| `schedule_url` | required | A SuperSaaS `/schedule/` URL, or a third-party page linking to exactly one. |
+| `from_date` | required | `YYYY-MM-DD`, inclusive. |
+| `through_date` | required | `YYYY-MM-DD`, inclusive. Up to 366 days. |
+| `max_results` | `500` | Caps the returned `slots` list; `count` is always the full number. |
+| `respect_booking_window` | `true` | Apply the schedule's minimum and maximum advance-booking limits. Set `false` to examine historical data. |
 
-`schedule_url` may also be a third-party page. The server scans it for links to `supersaas.nl/schedule/...` or `supersaas.com/schedule/...`, including protocol-relative ones and ones inside embedded JSON, then continues from the schedule it finds and reports the origin as `linked_from`. A page that links to no schedule, or to several, is an error naming the candidates so you can pass the intended one directly. Only HTTPS URLs without credentials or custom ports are fetched, and the schedule itself must still resolve to a SuperSaaS host.
+`schedule_url` may be a business page instead. The server scans it for a link to a SuperSaaS schedule, follows it, and reports the origin as `linked_from`.
 
-Times are returned as schedule wall-clock strings (`YYYY-MM-DD HH:MM`). The schedule's numeric appointment and exception epochs are interpreted as UTC, matching the tested page. The server refreshes the page and AJAX data on each call, so results can change as bookings are made.
+### Response
 
-For the saved October fixture, the week of October 19 has one free slot: **October 22, 09:30–12:30**. Monday is closed by the low seven bits of `bit_prefs` (`0b1111001`, Sunday first). The October 13 Tuesday exception opens 09:30–12:30.
+```json
+{
+  "schedule_url": "https://www.supersaas.nl/schedule/downthehatch/SLEEP",
+  "from_date": "2026-10-19",
+  "through_date": "2026-10-25",
+  "time_basis": "schedule wall time; epoch values interpreted as UTC",
+  "unit": "slot",
+  "duration_minutes": 180,
+  "count": 1,
+  "truncated": false,
+  "slots": [{ "start": "2026-10-22 09:30", "end": "2026-10-22 12:30" }]
+}
+```
 
-SuperSaaS selects exception rows by their **start date**. To catch a blocked range that began before the requested window, the AJAX query sets `efrom=1970-01-01` while keeping `eto` at the window's end. Exception type `0` blocks all overlapping dates; type `1` adds the listed opening interval. For example, the live response contains a type `0` block from February 19 through February 28, 2027, so the week of February 22 has **no available slots**.
+Times are schedule wall-clock strings, `YYYY-MM-DD HH:MM`. `truncated` describes `slots` only, so compare it against `count` before treating a list as complete. Data is re-fetched on every call, so results change as other people book.
 
-## Start times
+`unit` is either `slot` or `night`. Appointment schedules return `slot` with `duration_minutes` set to the appointment length. Date-only schedules such as rentals return `night` and add three fields:
 
-SuperSaaS writes its start times into the page as `start=precalc_constraints('<list>')`, and the server expands that string the same way SuperSaaS's own page script does:
+```json
+{
+  "unit": "night",
+  "duration_minutes": 1440,
+  "check_in": "14:00",
+  "check_out": "12:00",
+  "slots": [{ "start": "2026-10-05 14:00", "end": "2026-10-06 12:00" }],
+  "stays": [{ "start": "2026-10-05", "end": "2026-10-10", "nights": 5 }]
+}
+```
 
-- A **positive** number is a minute-of-day offset: `570` is 09:30.
-- **`0`** is the hourly grid, `00:00` through `23:00`. It is a common default and does *not* mean "midnight only".
-- A **negative** `-N` is a repeating grid every `N` minutes, so `' -30 0'` is every half hour and `' -5 0'` is every five minutes.
-- A `:<mask>=<list>` suffix replaces the days selected by the weekday bitmask, which is numbered from Sunday, like `bit_prefs`. `'540 720:1=60 120'` opens Sunday at 01:00 and 02:00 and every other day at 09:00 and 12:00.
-- When the page sets `rounding` to `86400`, SuperSaaS keeps a single start time for the day and ignores the per-weekday suffixes; the server does the same.
+Each `slots` entry is one night, from check-in on a date to check-out on the next; `duration_minutes` is the nominal 1440-minute night. `stays` merges consecutive free nights into the ranges you can actually book, so four adjacent nights become one four-night stay. Use `slots` when pricing per night and `stays` when offering a date range to the customer.
 
-Expanded start times are then filtered by that weekday's opening periods, so a 24-hour grid on an office that opens 09:00–17:00 yields eight hourly slots rather than a midnight-only answer.
+### Errors
+
+Every error names a cause, and most have a remedy:
+
+| Error | What to do |
+| --- | --- |
+| Page asks the visitor to pick a resource | Pass one resource URL, such as `.../Meeting_Rooms/Room_1` or `.../Rental_Homes/House_1`. |
+| Page links to several schedules | The message lists them; pass the intended one directly. |
+| Schedule is kept behind a login | Nothing to do — the schedule is not public. |
+| Schedule publishes opening hours but no start times | Nothing to do — slots are generated per request, not from a fixed grid. |
+| URL is not a public SuperSaaS HTTPS page | Use `https://` with no credentials or custom port. |
 
 ## Scope
 
-This server handles the tested resource-schedule shape: one resource, fixed duration under 24 hours, up to two daily opening periods, explicit, repeating-grid, and per-weekday start times, weekday enable bits, additive opening exceptions, blocked ranges, booked appointments, and buffer time. It rejects schedules advertising clustering, synchronization, or complex linked rules. Other SuperSaaS schedule types, recurring rule patterns, per-user limits, and payment-dependent availability are not modeled. An available slot is a calculated candidate, not a booking guarantee; the booking page remains authoritative at reservation time.
+Supported: public resource schedules with a single resource, fixed appointment duration, weekly opening hours with per-day exceptions and blocked ranges, booked appointments, buffer time, advance-booking limits, and both slot and night units.
 
-Rejections name the cause and, where possible, the remedy:
+Not modeled: scheduling plans other than the resource type, recurring rules, per-user limits, minimum-stay rules, and payment-dependent availability. An available slot is a calculated candidate, not a booking guarantee — the booking page remains authoritative at reservation time.
 
-- A page with `filter=0` asks the visitor to choose a resource, so pass one resource URL such as `.../Meeting_Rooms/Room_1`.
-- A schedule publishing no opening hours is behind a login; SuperSaaS returns HTTP 200 with a login stub rather than a 4xx, so this presents as missing data.
-- A schedule publishing opening hours but no start times generates its slots from the request time, which the server cannot replay.
-- A `default_length` of 86400 or more is a date-only schedule, typically a nightly rental priced per `price_unit=86400`. This guard is load-bearing rather than merely conservative: with a 24-hour unit, a 12:00 start ends at minute 2160 and can never fit inside a single day's opening period, so the containment test would silently return zero slots.
-
-## Test
+## Development
 
 ```sh
 .venv/bin/python -m unittest -v test_supersaas_mcp.py
+.venv/bin/python check_release.py
 ```
 
-The tests use the included copies of your example files, plus a saved copy of the SuperSaaS `Meeting_Rooms/Room_1` demo schedule and its AJAX response. That pair covers the hourly-grid start time, which the October fixture does not exercise: Room_1 declares `precalc_constraints('0')` inside 09:00–17:00 opening hours, and the correct week is 23 slots where a literal reading of `0` returns none.
-
-Live calls drift as customers book, so the saved fixtures are the stable assertion. On 2026-09-27 a live read-only call returned the expected October 22 slot for `downthehatch/SLEEP`; by 2026-09-28 that whole week was booked out and the same call correctly returns none, while the October 13 exception day still resolves.
+The tests run offline against saved copies of three real schedules, so they do not drift as customers book. See [INTERNALS.md](INTERNALS.md#fixtures) for what each fixture pins.
 
 ## Release
 
@@ -100,7 +140,7 @@ Releases use [PyPI Trusted Publishing](https://docs.pypi.org/trusted-publishers/
 
 1. Create a `pypi` environment in this GitHub repository and allow deployment from version tags. In PyPI, register a pending trusted publisher for owner `RichieB2B`, repository `supersaas-slots-mcp`, workflow `release.yml`, and environment `pypi`. The PyPI project does not need to exist yet.
 2. Create an `mcp-registry` GitHub environment and allow deployment from version tags. The Registry uses GitHub OIDC, so it needs no registry token.
-3. Keep the version in `pyproject.toml`, `server.json` (both version fields), and the FastMCP server constructor in sync. Commit the release before tagging it.
-4. Push a matching tag, for example `git tag v0.1.0 && git push origin v0.1.0`.
+3. Keep the version in `pyproject.toml`, `server.json` (both version fields), and the FastMCP server constructor in sync. `check_release.py` verifies this and accepts the candidate tag with `--tag v0.2.0`. Commit the release before tagging it.
+4. Push a matching tag, for example `git tag v0.2.0 && git push origin v0.2.0`.
 
 The [release workflow](.github/workflows/release.yml) tests and builds the distribution, publishes it to PyPI, then submits `server.json` to the MCP Registry. The [CI workflow](.github/workflows/ci.yml) runs tests and package checks on pushes and pull requests. A pushed release tag publishes externally; review its commit and environment settings first.

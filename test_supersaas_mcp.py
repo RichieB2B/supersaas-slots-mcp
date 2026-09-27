@@ -8,7 +8,7 @@ import select
 import subprocess
 import sys
 import unittest
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from unittest import mock
 
 try:
@@ -302,15 +302,15 @@ class DiagnosticsTests(unittest.TestCase):
             module.parse_schedule(html, self.URL)
         self.assertIn("pick a resource", str(caught.exception))
 
-    def test_date_only_rental_is_named_rather_than_called_bad_duration(self):
-        html = ("<script>var start=precalc_constraints('720 840'), rounding=86400,"
+    def test_date_only_units_without_daily_rounding_are_still_rejected(self):
+        html = ("<script>var start=precalc_constraints('720 840'), rounding=60,"
                 "open_times=[0,0,0,0,0,0,0,1440,1440,1440,1440,1440,1440,1440],"
                 "cluster=0,complex=0,sync=false,filter=405725,rp_id=9,token=9,bit_prefs=126,"
                 "default_length=86400,buffer=0,add_limit=0,early_limit=0,"
                 "resource[405725]={data:[0,0,\"House_1\",5]}</script>")
         with self.assertRaises(module.ScheduleError) as caught:
             module.parse_schedule(html, self.URL)
-        self.assertIn("date-only", str(caught.exception))
+        self.assertIn("without daily rounding", str(caught.exception))
 
     def test_a_24_hour_unit_would_return_no_slots_so_the_guard_is_load_bearing(self):
         schedule = module.parse_schedule(
@@ -320,6 +320,141 @@ class DiagnosticsTests(unittest.TestCase):
         self.assertEqual(module.calculate_slots(schedule, data,
                                                 date(2026, 9, 28), date(2026, 10, 3),
                                                 now=datetime(2026, 9, 27, tzinfo=timezone.utc)), [])
+
+
+class RentalHomeTests(unittest.TestCase):
+    """A public date-only schedule: nightly rental, check-in 14:00, check-out 12:00."""
+
+    URL = "https://www.supersaas.com/schedule/demo/Rental_Homes/House_1"
+
+    @classmethod
+    def setUpClass(cls):
+        cls.schedule = module.parse_schedule(
+            (FIXTURES / "rental-home.html").read_text(errors="replace"), cls.URL)
+        cls.data = json.loads((FIXTURES / "rental-home-ajax.json").read_text())
+        cls.now = datetime(2026, 9, 27, tzinfo=timezone.utc)
+
+    def nights(self, first, last):
+        return module.calculate_slots(self.schedule, self.data, first, last, now=self.now)
+
+    def test_page_is_recognised_as_date_only_with_check_in_and_out(self):
+        self.assertTrue(self.schedule.date_only)
+        self.assertEqual(self.schedule.checkin_minute, 840)
+        self.assertEqual(self.schedule.checkout_minute, 720)
+        self.assertEqual(self.schedule.duration_seconds, 86400)
+        self.assertEqual(self.schedule.starts, ((840,),) * 7)
+
+    def test_night_runs_from_check_in_to_next_morning_check_out(self):
+        night = self.nights(date(2026, 10, 5), date(2026, 10, 6))[0]
+        self.assertEqual(night, {"start": "2026-10-05 14:00", "end": "2026-10-06 12:00"})
+
+    def test_sunday_check_ins_are_closed_by_bit_prefs(self):
+        nights = self.nights(date(2026, 9, 28), date(2026, 11, 30))
+        self.assertTrue(nights)
+        for night in nights:
+            self.assertNotEqual(date.fromisoformat(night["start"][:10]).weekday(), 6)
+
+    def test_booked_night_is_dropped_but_its_check_out_night_survives(self):
+        nights = {n["start"][:10] for n in self.nights(date(2026, 11, 15), date(2026, 11, 20))}
+        self.assertNotIn("2026-11-16", nights)  # Occupied by the saved appointment.
+        self.assertIn("2026-11-17", nights)     # Check-out day is bookable again.
+        self.assertIn("2026-11-18", nights)
+
+    def test_other_resources_do_not_block_this_one(self):
+        nights = self.nights(date(2026, 9, 28), date(2026, 9, 29))
+        self.assertIn({"start": "2026-09-28 14:00", "end": "2026-09-29 12:00"}, nights)
+
+    def test_consecutive_nights_merge_into_stays(self):
+        nights = self.nights(date(2026, 9, 28), date(2026, 11, 30))
+        stays = module.merge_stays(nights)
+        self.assertEqual(sum(stay["nights"] for stay in stays), len(nights))
+        previous_end = None
+        for stay in stays:
+            span = (date.fromisoformat(stay["end"]) - date.fromisoformat(stay["start"])).days
+            self.assertEqual(stay["nights"], span)
+            self.assertGreaterEqual(stay["nights"], 1)
+            if previous_end is not None:
+                self.assertGreaterEqual(stay["start"], previous_end)  # Disjoint and ordered.
+            previous_end = stay["end"]
+            for offset in range(stay["nights"]):
+                check_in = date.fromisoformat(stay["start"]) + timedelta(days=offset)
+                self.assertNotEqual(check_in.weekday(), 6)  # No night starts on Sunday.
+        self.assertEqual(stays[0], {"start": "2026-09-28", "end": "2026-10-03", "nights": 5})
+
+    def test_blocked_range_exception_closes_nights(self):
+        # Nov 12 00:00 to Nov 17 00:00 UTC overlaps check-in dates 12, 13, 14 and 16.
+        blocked = {"app": [], "exc": [[1794441600, 1794873600, 0]]}
+        nights = {n["start"][:10] for n in module.calculate_slots(
+            self.schedule, blocked, date(2026, 11, 9), date(2026, 11, 21), now=self.now)}
+        self.assertFalse(nights & {"2026-11-12", "2026-11-13", "2026-11-14", "2026-11-16"})
+        self.assertTrue({"2026-11-09", "2026-11-10", "2026-11-17", "2026-11-18"} <= nights)
+        self.assertNotIn("2026-11-15", nights)  # Sunday, closed by bit_prefs regardless.
+
+    def test_booking_window_applies_to_the_check_in_instant(self):
+        # The live demo sets no limits, so impose a one-day minimum advance.
+        limited = dataclasses.replace(self.schedule, add_limit=86400)
+        nights = module.calculate_slots(limited, self.data,
+                                       date(2026, 10, 1), date(2026, 10, 8),
+                                       now=datetime(2026, 10, 6, tzinfo=timezone.utc))
+        self.assertTrue(nights)
+        for night in nights:
+            self.assertGreaterEqual(night["start"], "2026-10-07 14:00")
+
+
+class NightTimeTests(unittest.TestCase):
+    def test_two_constraints_map_later_check_in_and_earlier_check_out(self):
+        self.assertEqual(module._night_times("720 840"), (840, 720))
+        self.assertEqual(module._night_times("540 1080"), (1080, 540))
+
+    def test_single_constraint_makes_a_full_24_hour_night(self):
+        self.assertEqual(module._night_times("720"), (720, 720))
+        self.assertEqual(module._night_times("840"), (840, 840))
+
+    def test_repeat_grids_cannot_be_read_as_night_times(self):
+        for text, count in [("0", "24"), (" -30 0", "48"), ("570 810 1110", "3")]:
+            with self.subTest(text=text):
+                with self.assertRaises(module.ScheduleError) as caught:
+                    module._night_times(text)
+                self.assertIn(f"from {count} start times", str(caught.exception))
+
+    def test_a_full_24_hour_night_spans_exactly_one_day(self):
+        schedule = module.parse_schedule(
+            (FIXTURES / "rental-home.html").read_text(errors="replace"), RentalHomeTests.URL)
+        schedule = dataclasses.replace(schedule, starts=((720,),) * 7,
+                                       checkin_minute=720, checkout_minute=720)
+        night = module.calculate_slots(schedule, {"app": [], "exc": []},
+                                       date(2026, 10, 5), date(2026, 10, 6),
+                                       now=datetime(2026, 9, 27, tzinfo=timezone.utc))[0]
+        self.assertEqual(night, {"start": "2026-10-05 12:00", "end": "2026-10-06 12:00"})
+
+
+class ResponseShapeTests(unittest.TestCase):
+    def test_night_mode_adds_unit_clock_times_and_stays(self):
+        page = (FIXTURES / "rental-home.html").read_bytes()
+        ajax = (FIXTURES / "rental-home-ajax.json").read_bytes()
+        with mock.patch.object(module, "_get",
+                               side_effect=[(page, RentalHomeTests.URL), (ajax, "https://x")]):
+            result = module.find_available_slots(RentalHomeTests.URL, "2026-09-28", "2026-10-25")
+        self.assertEqual(result["unit"], "night")
+        self.assertEqual(result["check_in"], "14:00")
+        self.assertEqual(result["check_out"], "12:00")
+        self.assertEqual(result["duration_minutes"], 1440)
+        self.assertEqual(result["count"], len(result["slots"]))
+        self.assertEqual(result["stays"][0],
+                         {"start": "2026-09-28", "end": "2026-10-03", "nights": 5})
+        self.assertEqual(sum(stay["nights"] for stay in result["stays"]), result["count"])
+
+    def test_slot_mode_keeps_its_original_shape(self):
+        page = (FIXTURES / "meeting-room.html").read_bytes()
+        ajax = (FIXTURES / "meeting-room-ajax.json").read_bytes()
+        with mock.patch.object(module, "_get",
+                               side_effect=[(page, MeetingRoomTests.URL), (ajax, "https://x")]):
+            result = module.find_available_slots(MeetingRoomTests.URL, "2026-09-28", "2026-10-02")
+        self.assertEqual(result["unit"], "slot")
+        self.assertEqual(result["duration_minutes"], 60)
+        self.assertEqual(result["count"], 23)
+        for key in ("stays", "check_in", "check_out"):
+            self.assertNotIn(key, result)
 
 
 if __name__ == "__main__":
