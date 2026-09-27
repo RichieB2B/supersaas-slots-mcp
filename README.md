@@ -1,17 +1,27 @@
 # SuperSaaS slots MCP server
 
+<!-- mcp-name: io.github.richieb2b/supersaas-slots-mcp -->
+
 A read-only FastMCP server for public **resource** schedules with one resource and explicit numeric start times. It downloads the public schedule page, extracts `rp_id`, `token`, `bit_prefs`, `open_times`, appointment duration, buffer, and start-time constraints, then calls `/ajax/resource/<rp_id>` in 28-day windows. Each call explicitly requests the exception list with `efrom`, `eto`, and `ed=r`. No account or API key is needed for the tested public page.
+
+Licensed under the [MIT License](LICENSE).
 
 ## Install
 
-From the project directory, use Python 3.10+:
+After publication, use Python 3.10+:
+
+```sh
+pip install supersaas-slots-mcp
+```
+
+For local development from the project directory:
 
 ```sh
 python3 -m venv .venv
 .venv/bin/python -m pip install -e .
 ```
 
-Dependencies are declared in `pyproject.toml`; FastMCP is pinned to version 4.0.10. This creates the `supersaas-slots` command in `.venv/bin`.
+Dependencies are declared in `pyproject.toml`; FastMCP is pinned to version 4.0.10. Both `supersaas-slots` and `supersaas-slots-mcp` start the server.
 
 ## Connect
 
@@ -60,3 +70,14 @@ This server handles the tested resource-schedule shape: one resource, fixed dura
 ```
 
 The tests use the included copies of your example files. A live read-only call against the example schedule also returned the expected October 22 slot on 2026-09-27.
+
+## Release
+
+Releases use [PyPI Trusted Publishing](https://docs.pypi.org/trusted-publishers/using-a-publisher/) and [MCP Registry GitHub OIDC](https://github.com/modelcontextprotocol/registry/blob/main/docs/modelcontextprotocol-io/github-actions.mdx). Before the first release:
+
+1. Create a `pypi` environment in this GitHub repository and allow deployment from version tags. In PyPI, register a pending trusted publisher for owner `RichieB2B`, repository `supersaas-slots-mcp`, workflow `release.yml`, and environment `pypi`. The PyPI project does not need to exist yet.
+2. Create an `mcp-registry` GitHub environment and allow deployment from version tags. The Registry uses GitHub OIDC, so it needs no registry token.
+3. Keep the version in `pyproject.toml`, `server.json` (both version fields), and the FastMCP server constructor in sync. Commit the release before tagging it.
+4. Push a matching tag, for example `git tag v0.1.0 && git push origin v0.1.0`.
+
+The [release workflow](.github/workflows/release.yml) tests and builds the distribution, publishes it to PyPI, then submits `server.json` to the MCP Registry. The [CI workflow](.github/workflows/ci.yml) runs tests and package checks on pushes and pull requests. A pushed release tag publishes externally; review its commit and environment settings first.

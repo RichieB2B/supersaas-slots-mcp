@@ -8,13 +8,34 @@ version = "0.1.0"
 description = "Read-only MCP tool for public SuperSaaS resource availability"
 readme = "README.md"
 requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Richard van den Berg" }]
+keywords = ["mcp", "supersaas", "scheduling", "availability"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Office/Business :: Scheduling",
+]
 dependencies = [
     "fastmcp==4.0.10",
     "pydantic>=2,<3",
 ]
 
+[project.urls]
+Homepage = "https://github.com/RichieB2B/supersaas-slots-mcp"
+Repository = "https://github.com/RichieB2B/supersaas-slots-mcp"
+Issues = "https://github.com/RichieB2B/supersaas-slots-mcp/issues"
+
 [project.scripts]
 supersaas-slots = "supersaas_mcp:main"
+supersaas-slots-mcp = "supersaas_mcp:main"
 
 [tool.setuptools]
 py-modules = ["supersaas_mcp"]
