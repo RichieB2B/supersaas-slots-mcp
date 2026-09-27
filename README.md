@@ -2,7 +2,7 @@
 
 <!-- mcp-name: io.github.RichieB2B/supersaas-slots-mcp -->
 
-A read-only FastMCP server for public **resource** schedules with one resource and explicit numeric start times. Give it either a SuperSaaS schedule URL or a business page that links to one, such as `https://www.down-the-hatch.nl/reserveren/`. It downloads the page, extracts `rp_id`, `token`, `bit_prefs`, `open_times`, appointment duration, buffer, and start-time constraints, then calls `/ajax/resource/<rp_id>` in 28-day windows. Each call explicitly requests the exception list with `efrom`, `eto`, and `ed=r`. No account or API key is needed for the tested public page.
+A read-only FastMCP server for public **resource** schedules with one resource and declared start times. Give it either a SuperSaaS schedule URL or a business page that links to one, such as `https://www.down-the-hatch.nl/reserveren/`. It downloads the page, extracts `rp_id`, `token`, `bit_prefs`, `open_times`, appointment duration, buffer, and start-time constraints, then calls `/ajax/resource/<rp_id>` in 28-day windows. Each call explicitly requests the exception list with `efrom`, `eto`, and `ed=r`. No account or API key is needed for the tested public page.
 
 Licensed under the [MIT License](LICENSE).
 
@@ -61,9 +61,28 @@ For the saved October fixture, the week of October 19 has one free slot: **Octob
 
 SuperSaaS selects exception rows by their **start date**. To catch a blocked range that began before the requested window, the AJAX query sets `efrom=1970-01-01` while keeping `eto` at the window's end. Exception type `0` blocks all overlapping dates; type `1` adds the listed opening interval. For example, the live response contains a type `0` block from February 19 through February 28, 2027, so the week of February 22 has **no available slots**.
 
+## Start times
+
+SuperSaaS writes its start times into the page as `start=precalc_constraints('<list>')`, and the server expands that string the same way SuperSaaS's own page script does:
+
+- A **positive** number is a minute-of-day offset: `570` is 09:30.
+- **`0`** is the hourly grid, `00:00` through `23:00`. It is a common default and does *not* mean "midnight only".
+- A **negative** `-N` is a repeating grid every `N` minutes, so `' -30 0'` is every half hour and `' -5 0'` is every five minutes.
+- A `:<mask>=<list>` suffix replaces the days selected by the weekday bitmask, which is numbered from Sunday, like `bit_prefs`. `'540 720:1=60 120'` opens Sunday at 01:00 and 02:00 and every other day at 09:00 and 12:00.
+- When the page sets `rounding` to `86400`, SuperSaaS keeps a single start time for the day and ignores the per-weekday suffixes; the server does the same.
+
+Expanded start times are then filtered by that weekday's opening periods, so a 24-hour grid on an office that opens 09:00–17:00 yields eight hourly slots rather than a midnight-only answer.
+
 ## Scope
 
-This server handles the tested resource-schedule shape: one resource, fixed duration, up to two daily opening periods, explicit numeric start times, weekday enable bits, additive opening exceptions, blocked ranges, booked appointments, and buffer time. It rejects schedules advertising clustering, synchronization, or complex linked rules. Other SuperSaaS schedule types, recurring rule patterns, per-user limits, and payment-dependent availability are not modeled. An available slot is a calculated candidate, not a booking guarantee; the booking page remains authoritative at reservation time.
+This server handles the tested resource-schedule shape: one resource, fixed duration under 24 hours, up to two daily opening periods, explicit, repeating-grid, and per-weekday start times, weekday enable bits, additive opening exceptions, blocked ranges, booked appointments, and buffer time. It rejects schedules advertising clustering, synchronization, or complex linked rules. Other SuperSaaS schedule types, recurring rule patterns, per-user limits, and payment-dependent availability are not modeled. An available slot is a calculated candidate, not a booking guarantee; the booking page remains authoritative at reservation time.
+
+Rejections name the cause and, where possible, the remedy:
+
+- A page with `filter=0` asks the visitor to choose a resource, so pass one resource URL such as `.../Meeting_Rooms/Room_1`.
+- A schedule publishing no opening hours is behind a login; SuperSaaS returns HTTP 200 with a login stub rather than a 4xx, so this presents as missing data.
+- A schedule publishing opening hours but no start times generates its slots from the request time, which the server cannot replay.
+- A `default_length` of 86400 or more is a date-only schedule, typically a nightly rental priced per `price_unit=86400`. This guard is load-bearing rather than merely conservative: with a 24-hour unit, a 12:00 start ends at minute 2160 and can never fit inside a single day's opening period, so the containment test would silently return zero slots.
 
 ## Test
 
@@ -71,7 +90,9 @@ This server handles the tested resource-schedule shape: one resource, fixed dura
 .venv/bin/python -m unittest -v test_supersaas_mcp.py
 ```
 
-The tests use the included copies of your example files. A live read-only call against the example schedule also returned the expected October 22 slot on 2026-09-27.
+The tests use the included copies of your example files, plus a saved copy of the SuperSaaS `Meeting_Rooms/Room_1` demo schedule and its AJAX response. That pair covers the hourly-grid start time, which the October fixture does not exercise: Room_1 declares `precalc_constraints('0')` inside 09:00–17:00 opening hours, and the correct week is 23 slots where a literal reading of `0` returns none.
+
+Live calls drift as customers book, so the saved fixtures are the stable assertion. On 2026-09-27 a live read-only call returned the expected October 22 slot for `downthehatch/SLEEP`; by 2026-09-28 that whole week was booked out and the same call correctly returns none, while the October 13 exception day still resolves.
 
 ## Release
 

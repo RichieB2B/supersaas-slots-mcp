@@ -19,11 +19,15 @@ MAX_DAYS = 366
 CHUNK_DAYS = 28
 TIMEOUT = 20
 MAX_BYTES = 5_000_000
+WEEKDAYS = 7
+MINUTES_PER_DAY = 1440
+SECONDS_PER_DAY = 86400
+DAILY_ROUNDING = SECONDS_PER_DAY
 SCHEDULE_HOSTS = {"supersaas.nl", "www.supersaas.nl", "supersaas.com", "www.supersaas.com"}
 SCHEDULE_LINK = re.compile(
     r"(?:https?:)?//(?:www\.)?supersaas\.(?:nl|com)/schedule/[^\s\"'<>()]*", re.IGNORECASE
 )
-mcp = FastMCP("supersaas-slots", version="0.1.2")
+mcp = FastMCP("supersaas-slots", version="0.1.3")
 
 
 class ScheduleError(ValueError):
@@ -38,7 +42,7 @@ class Schedule:
     token: int
     bit_prefs: int
     open_times: tuple[int | None, ...]
-    starts: tuple[int, ...]
+    starts: tuple[tuple[int, ...], ...]
     duration_seconds: int
     buffer_seconds: int
     add_limit: int
@@ -127,15 +131,79 @@ def load_schedule(url: str) -> tuple[Schedule, str]:
     return parse_schedule(body.decode("utf-8"), final_url), final_url
 
 
+def _weekday(day: date) -> int:
+    """SuperSaaS indexes weekdays and ``bit_prefs`` bits from Sunday = 0."""
+    return (day.weekday() + 1) % 7
+
+
+def _constraint_list(text: str) -> tuple[int, ...]:
+    """Expand one whitespace-separated start-time list.
+
+    SuperSaaS writes a positive token as a minute-of-day offset and a zero or
+    negative token as a repeating grid: ``0`` is hourly, ``-30`` every half
+    hour past the half hour.
+    """
+    minutes = []
+    for token in text.split():
+        if not re.fullmatch(r"-?\d+", token) or abs(int(token)) > MINUTES_PER_DAY:
+            raise ScheduleError(f"Unparseable start-time constraint {token!r}.")
+        value = int(token)
+        if value > 0:
+            minutes.append(value % MINUTES_PER_DAY)
+        else:
+            minutes.extend(-value + 60 * offset for offset in range(24))
+    return tuple(sorted(set(minutes)))
+
+
+def parse_constraints(text: str, rounding: int) -> tuple[tuple[int, ...], ...]:
+    """Port of the SuperSaaS ``precalc_constraints()`` page script.
+
+    Returns one start-minute tuple per weekday, indexed like ``open_times`` and
+    ``bit_prefs`` so element 0 is Sunday. The wire format is
+    ``"<base>[:<mask>=<list> ...]"`` where ``<mask>`` is a weekday bitmask.
+    """
+    base_text, *overrides = text.split(":")
+    base = _constraint_list(base_text)
+    if not base:
+        raise ScheduleError("Schedule declares no start times.")
+    if rounding == DAILY_ROUNDING:
+        return tuple(base[1:2] or base[:1] for _ in range(WEEKDAYS))
+    days = [base] * WEEKDAYS
+    for override in overrides:
+        mask_text, separator, list_text = override.partition("=")
+        if not separator or not re.fullmatch(r"\d+", mask_text.strip()):
+            raise ScheduleError("Malformed per-weekday start-time constraint.")
+        values = _constraint_list(list_text)
+        mask, position = int(mask_text), 0
+        while mask:
+            if position >= WEEKDAYS:
+                raise ScheduleError("Per-weekday start-time mask spans more than 7 days.")
+            if mask & 1:
+                days[position] = values
+            mask >>= 1
+            position += 1
+    return tuple(days)
+
+
+def _missing_constraints_error(source: str) -> ScheduleError:
+    if not re.search(r"\bopen_times\s*=", source):
+        return ScheduleError(
+            "This schedule publishes no availability; SuperSaaS keeps it behind a login."
+        )
+    return ScheduleError(
+        "This schedule publishes opening hours but no start times; only resource "
+        "schedules with explicit start times are supported."
+    )
+
+
 def parse_schedule(html: str, page_url: str) -> Schedule:
     _validate_schedule_url(page_url)
     source = unescape(html)
     start_match = re.search(r"\bstart\s*=\s*precalc_constraints\(\s*(['\"])(.*?)\1\s*\)", source, re.S)
-    if not start_match or not re.fullmatch(r"\s*\d+(?:[\s,]+\d+)*\s*", start_match.group(2)):
-        raise ScheduleError("Only explicit numeric start-time constraints are supported.")
-    starts = tuple(sorted(set(map(int, re.findall(r"\d+", start_match.group(2))))))
-    if any(x < 0 or x >= 1440 for x in starts):
-        raise ScheduleError("Invalid start-time constraint.")
+    if not start_match:
+        raise _missing_constraints_error(source)
+    rounding = re.search(r"\brounding\s*=\s*(\d+)", source)
+    starts = parse_constraints(start_match.group(2), int(rounding.group(1)) if rounding else 0)
     open_match = re.search(r"\bopen_times\s*=\s*(\[[^\]]*\])", source, re.S)
     if not open_match:
         raise ScheduleError("Schedule page does not expose open_times.")
@@ -145,7 +213,7 @@ def parse_schedule(html: str, page_url: str) -> Schedule:
         raise ScheduleError("Cannot parse open_times.") from exc
     if not isinstance(open_times, list) or len(open_times) < 14 or len(open_times) > 28:
         raise ScheduleError("Unsupported open_times layout.")
-    if any(x is not None and (type(x) is not int or x < 0 or x > 1440) for x in open_times):
+    if any(x is not None and (type(x) is not int or x < 0 or x > MINUTES_PER_DAY) for x in open_times):
         raise ScheduleError("Invalid open_times value.")
     open_times += [None] * (28 - len(open_times))
     if re.search(r"\bcomplex\s*=\s*[1-9]", source) or re.search(r"\bsync\s*=\s*true", source):
@@ -153,14 +221,23 @@ def parse_schedule(html: str, page_url: str) -> Schedule:
     if re.search(r"\bcluster\s*=\s*[1-9]", source):
         raise ScheduleError("Cluster booking is not supported.")
     resource_id = _number(source, "filter")
+    if resource_id == 0:
+        raise ScheduleError(
+            "This page asks the visitor to pick a resource; pass one resource URL instead."
+        )
     if not re.search(r"resource\[" + str(resource_id) + r"\]", source):
         raise ScheduleError("Could not identify a single resource on this page.")
     duration = _number(source, "default_length")
-    if duration <= 0 or duration >= 86400:
+    if duration >= DAILY_ROUNDING:
+        raise ScheduleError(
+            "This is a date-only schedule with 24-hour units, such as a nightly rental; "
+            "only schedules with sub-day appointment durations are supported."
+        )
+    if duration <= 0:
         raise ScheduleError("Unsupported appointment duration.")
     # On the observed resource page `buffer` is in minutes.
     buffer_minutes = _number(source, "buffer")
-    if buffer_minutes < 0 or buffer_minutes > 1440:
+    if buffer_minutes < 0 or buffer_minutes > MINUTES_PER_DAY:
         raise ScheduleError("Invalid buffer.")
     return Schedule(
         page_url=page_url, resource_id=resource_id,
@@ -187,12 +264,12 @@ def _periods(schedule: Schedule, day: date, exceptions: list[list]) -> list[tupl
     day_start = int(datetime(day.year, day.month, day.day, tzinfo=timezone.utc).timestamp())
     if any(not isinstance(row, list) or len(row) < 3 for row in exceptions):
         raise ScheduleError("Malformed exception in AJAX response.")
-    relevant = [row for row in exceptions if row[0] < day_start + 86400 and row[1] > day_start]
+    relevant = [row for row in exceptions if row[0] < day_start + SECONDS_PER_DAY and row[1] > day_start]
     if any(row[2] not in (0, 1) or (row[2] == 1 and len(row) < 5) for row in relevant):
         raise ScheduleError(f"Unsupported exception on {day}.")
     if any(row[2] == 0 for row in relevant):
         return []
-    weekday = (day.weekday() + 1) % 7  # Sunday = bit 0.
+    weekday = _weekday(day)
     periods = []
     if schedule.bit_prefs & (1 << weekday):
         for offset in (0, 14):
@@ -203,7 +280,7 @@ def _periods(schedule: Schedule, day: date, exceptions: list[list]) -> list[tupl
     for row in relevant:
         if row[2] == 1:
             a, b = row[3], row[4]
-            if type(a) is not int or type(b) is not int or not (0 <= a < b <= 1440):
+            if type(a) is not int or type(b) is not int or not (0 <= a < b <= MINUTES_PER_DAY):
                 raise ScheduleError(f"Invalid opening exception on {day}.")
             periods.append((a, b))
     return periods
@@ -227,11 +304,12 @@ def calculate_slots(schedule: Schedule, data: dict, start: date, stop: date,
     day = start
     while day < stop:
         midnight = int(datetime(day.year, day.month, day.day, tzinfo=timezone.utc).timestamp())
-        for minute in schedule.starts:
+        periods = _periods(schedule, day, exceptions)
+        for minute in schedule.starts[_weekday(day)]:
             begin = midnight + minute * 60
             finish = begin + schedule.duration_seconds
             end_minute = minute + schedule.duration_seconds / 60
-            if not any(a <= minute and end_minute <= b for a, b in _periods(schedule, day, exceptions)):
+            if not any(a <= minute and end_minute <= b for a, b in periods):
                 continue
             if respect_booking_window:
                 # SuperSaaS treats a zero limit as "no limit"; see the truthiness
@@ -266,9 +344,10 @@ def find_available_slots(
 
     Accepts a SuperSaaS schedule URL directly, or any public HTTPS page that
     links to exactly one schedule on supersaas.nl or supersaas.com, such as a
-    salon's own booking page. Supports explicit numeric start times, fixed
-    duration, weekly opening hours, exceptions, booked appointments, and
-    booking-window limits. Unsupported schedule rules are reported as errors.
+    salon's own booking page. Supports explicit, repeating-grid, and per-weekday
+    start times, fixed duration, weekly opening hours, exceptions, booked
+    appointments, and booking-window limits. Unsupported schedule rules are
+    reported as errors.
     """
     try:
         start = date.fromisoformat(from_date)

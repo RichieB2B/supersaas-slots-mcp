@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	
+	<title>Demonstration of a Meeting Room Reservation System</title>
+	<meta name="robots" content="noindex">
+	<link rel="stylesheet" href="//assets.supersaas.net/assets/schedule_theme_5-7df56e32f08dd035aa71afaf2a08905fe479cc1bc3dcef4940c6e912013d2929.css" />
+		<script src="//assets.supersaas.net/assets/resource-890a7bda4d9f68cb1c2acb06c4aff3448891488d2e0f682e868e72c7c0365ca9.js"></script>
+<script>if (typeof(showflags)=='undefined') document.write('<script src="/assets/resource-890a7bda4d9f68cb1c2acb06c4aff3448891488d2e0f682e868e72c7c0365ca9.js"><\/script>')</script>
+
+<link rel="icon" href="https://cdn.supersaas.net/favicon.ico"><script async src="https://www.googletagmanager.com/gtag/js?id=G-WPGSKJLYC7"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  var consent=document.cookie.indexOf("consent=yes")> -1 || /ssrc=(100|2dd)/.test(document.cookie) ? 'granted' : 'denied'
+  gtag('consent', 'default', {'ad_storage': consent, 'analytics_storage': 'granted', 'ad_user_data': consent, 'ad_personalization': consent})
+  gtag('js', new Date());
+  gtag('config', 'G-WPGSKJLYC7')
+  if (/SS_keep=/.test(document.cookie)) {gtag('set','user_properties',{'role': 'Admin'});gtag('event', 'app', {'role': 'Admin','event_label':'Set role'})}
+  else {if (/SS_\d+_keep=/.test(document.cookie)) gtag('event', 'app', {'role': 'User','event_label':'Set role'});}
+</script></head>
+<body>
+<div class="header default_logo show_all"><div class="logo_w"><div id="head"><a href="/" id="logo_24" aria-label="Logo"></a></div></div><ul class="topmenu"><li></li> <li><a href="/schedule/help/demo/Meeting_Rooms?context=index&amp;return=%2Fschedule%2Fdemo%2FMeeting_Rooms%2FRoom_1">Help</a></li></ul></div>
+<noscript><div class="c"><b>Warning:</b> You will need to enable JavaScript on your browser for this web site to work!</div></noscript>
+	<div class="breadcrumb">&nbsp;</div>
+<div id="wrap-schedule" class="wrap-resource">
+	<div id="usc"></div>
+	<div id="intro">
+		
+		<h1>Demonstration of a Meeting Room Reservation System</h1>
+		<div id="message_box" data-user>
+				<div><p>This schedule puts no predefined limits on length or start time, suitable for a shared resource such as a meeting room. The system will check that no reservations overlap and that all times fall within office hours.</p>
+<p>Different meeting rooms have different colors, these can be changed at any time.<br>🔵 = Meeting room 1<br>🔴 = Meeting room 2<br>🟢 = Meeting room 3</p>
+<p>Feel free to add and delete entries on this schedule to see how it works. For the purpose of this demonstration, everyone can edit everyone else’s entries, even when not logged in.</p>
+<p>You can also view this schedule on a <a href="https://m.supersaas.com/schedule/demo/Meeting_Rooms" title="Meeting Room Demo Mobile">mobile device</a></p>
+<p><a href="/info/demos" target="_self">Leave demo</a></p></div>
+				
+			
+			<p class="flash"><span id="flash" style="display:none"></span></p>
+		</div>
+	</div>
+	<div id="legend"><div id="keytable"></div></div>
+	<div id="monthnav"></div>
+	<div id="tabContainer"></div>
+	<div id="agenda">
+		<i id="spin"></i><div id="noroom" style="display:none"></div><div id="viewholder"></div>
+	</div>
+</div>
+
+
+	<div class="dbox-w" id="oldres" style="display:none" role="dialog">
+		<div class="dbox-h dialoghead">
+			<span tabindex="-1">
+				<span id="oldres_edit">Edit Reservation</span>
+				<span id="oldres_view" style="display:none">View Reservation</span>
+			</span>
+			<a href="javascript:void(0)" onclick="hideDialog('oldres')" class="if if-times" aria-label="Close"></a>
+		</div>
+		<form action="/schedule/demo/Meeting_Rooms/Room_1" accept-charset="UTF-8" method="post">
+			<div id="oldres_error"></div>
+
+			<div class="dbox-c">
+					<div class="dbox-form-c" >
+			<div>
+				<label for="oldres_start_time" title="When" class="fancy-label"><i class="if if-clock"></i><span>When</span></label>
+				<div>
+					<span class="dt-tm">
+						<input size="18" onfocus="show_datepick(this,0)" onblur="hide_datepick(this, false, true)" autocomplete="off" class="fancy-field" type="text" name="oldres[start_time]" id="oldres_start_time" />
+						<span id="oldres_startm" class="g"></span>
+					</span>
+					<label for="oldres_finish_time">to</label>
+					<span class="dt-tm">
+						<input size="18" onfocus="show_datepick(this,0)" onblur="hide_datepick(this, 60)" autocomplete="off" class="fancy-field" type="text" name="oldres[finish_time]" id="oldres_finish_time" />
+						<span id="oldres_finishm" class="g"></span>
+					</span>
+				</div>
+			</div>
+
+		<div id="oldres_resr" style="display:none"><i class="if if-link" title="Service"></i><div id="oldres_res"></div></div>
+
+		<div><label for="oldres_description" class="fancy-label"><i class="if if-text" title="Description"></i><span>Description</span></label><div><textarea rows="2" cols="40" placeholder="Description" class="fancy-field" name="oldres[description]" id="oldres_description">
+</textarea></div></div>
+		<div><label for="oldres_full_name" class="fancy-label"><i class="if if-user" title="Full name"></i><span>Full name</span></label><div><input size="30" maxlength="50" placeholder="Full name" class="fancy-field" type="text" name="oldres[full_name]" id="oldres_full_name" /></div></div>
+		
+		
+		
+		
+		
+	</div>
+
+	<div class="dbox-form-c form-custom">
+	
+	
+	
+	
+
+
+
+		<div><label for="oldres_resource_id">Meeting Rooms</label><div><select onchange="reprice(this.id)" name="oldres[resource_id]" id="oldres_resource_id"><option value="168169">Room 1</option>
+<option value="168170">Room 2</option>
+<option value="168171">Room 3</option></select></div></div>
+
+
+			<div id="oldres_repeat" >
+				<div><label for="oldres_repeater">Repeat</label></div>
+				<div>
+					<span><select onchange="showuntil(this)" name="oldres[repeater]" id="oldres_repeater"><option value="0">None</option>
+<option value="1">Daily</option>
+<option value="2">Weekly</option>
+<option value="3">Bi-weekly</option>
+<option value="4">Monthly by date</option>
+<option value="5">Monthly by day</option></select></span>
+					<span id="oldres_until" style="display:none;padding:0 4px"><label for="oldres_until_time">until</label></span>
+					<span id="oldres_until2" style="display:none"><input size="18" style="text-align:center" onfocus="show_datepick(this,0)" onblur="hide_datepick()" autocomplete="off" class="fancy-custom" type="text" name="oldres[until_time]" id="oldres_until_time" /></span>
+				</div>
+			</div>
+				<div id="oldres_changeS" style="display:none"><span>Change</span><span class="s"><label><input type="radio" value="0" name="oldres[change]" id="oldres_change_0" />this one </label> <label><input type="radio" value="1" name="oldres[change]" id="oldres_change_1" />this and following </label></span></div>
+
+		<div id="oldres_statrow" style="display:none">
+				<span class="label">
+						Status
+				</span>
+			<span id="oldres_status"></span>
+		</div>
+		<div>
+			<div id="oldrescreated_by" class="small full-width"><span>Created on</span> <span id="oldres_created_by"></span></div>
+			<div id="oldresupdated_by" class="small full-width" style="display:none"><span>Updated on</span> <span id="oldres_updated_by"></span></div>
+		</div>
+	</div>
+
+
+				
+
+				<div class="dbox-download">
+					<i class="id id-ical" title="Download reservation as iCalendar file" onclick="download_ical('oldres')"></i>
+				</div>
+			</div>
+
+			<div class="dbox-f">
+				<span id="oldres_editlink"><input type="hidden" name="oldres[id]" id="oldres_id" />
+					<button name="edit" type="submit" id="oldres_sedit" onclick="return showIndicator(this)" class="bttn">Update reservation</button>
+					<button name="destroy" type="submit" id="oldres_sdestroy" onclick="return removeRes(this)" class="bttn i-trash-w sq"><span>Delete reservation</span></button>
+				</span>
+				<a href="javascript:void(0)" onclick="hideDialog('oldres');" class="l-c">Close</a>
+				<span class="spin" style="display:none"></span>
+			</div>
+
+			<input type="hidden" name="oldres[xpos]" id="oldres_xpos" />
+			<input type="hidden" name="oldres[ypos]" id="oldres_ypos" />
+</form>	</div>
+
+
+
+	<div class="dbox-w" id="reservation" style="display:none" role="dialog">
+		<div class="dbox-h dialoghead">
+			<span class="res_title" tabindex="-1">New Reservation</span>
+			<a href="javascript:void(0)" onclick="hideDialog('reservation')" class="if if-times" aria-label="Close"></a>
+		</div>
+		<form action="/schedule/demo/Meeting_Rooms/Room_1" accept-charset="UTF-8" method="post">
+			<div id="reservation_error" class="dbox-error"></div>
+			<div class="dbox-c">
+						<div class="dbox-form-c" >
+			<div>
+				<label for="reservation_start_time" title="When" class="fancy-label"><i class="if if-clock"></i><span>When</span></label>
+				<div>
+					<span class="dt-tm">
+						<input size="18" onfocus="show_datepick(this,0)" onblur="hide_datepick(this, false, true)" autocomplete="off" class="fancy-field" type="text" name="reservation[start_time]" id="reservation_start_time" />
+						<span id="reservation_startm" class="g"></span>
+					</span>
+					<label for="reservation_finish_time">to</label>
+					<span class="dt-tm">
+						<input size="18" onfocus="show_datepick(this,0)" onblur="hide_datepick(this, 60)" autocomplete="off" class="fancy-field" type="text" name="reservation[finish_time]" id="reservation_finish_time" />
+						<span id="reservation_finishm" class="g"></span>
+					</span>
+				</div>
+			</div>
+
+		
+
+		<div><label for="reservation_description" class="fancy-label"><i class="if if-text" title="Description"></i><span>Description</span></label><div><textarea rows="2" cols="40" placeholder="Description" class="fancy-field" name="reservation[description]" id="reservation_description">
+</textarea></div></div>
+		<div><label for="reservation_full_name" class="fancy-label"><i class="if if-user" title="Full name"></i><span>Full name</span></label><div><input size="30" maxlength="50" placeholder="Full name" class="fancy-field" type="text" name="reservation[full_name]" id="reservation_full_name" /></div></div>
+		
+		
+		
+		
+		
+	</div>
+
+	<div class="dbox-form-c form-custom">
+	
+	
+	
+	
+
+
+
+		<div><label for="reservation_resource_id">Meeting Rooms</label><div><select onchange="reprice(this.id)" name="reservation[resource_id]" id="reservation_resource_id"><option selected="selected" value="168169">Room 1</option>
+<option value="168170">Room 2</option>
+<option value="168171">Room 3</option></select></div></div>
+
+
+			<div id="reservation_repeat" >
+				<div><label for="reservation_repeater">Repeat</label></div>
+				<div>
+					<span><select onchange="showuntil(this)" name="reservation[repeater]" id="reservation_repeater"><option value="0">None</option>
+<option value="1">Daily</option>
+<option value="2">Weekly</option>
+<option value="3">Bi-weekly</option>
+<option value="4">Monthly by date</option>
+<option value="5">Monthly by day</option></select></span>
+					<span id="reservation_until" style="display:none;padding:0 4px"><label for="reservation_until_time">until</label></span>
+					<span id="reservation_until2" style="display:none"><input size="18" style="text-align:center" onfocus="show_datepick(this,0)" onblur="hide_datepick()" autocomplete="off" class="fancy-custom" type="text" name="reservation[until_time]" id="reservation_until_time" /></span>
+				</div>
+			</div>
+
+	</div>
+
+
+										<div class="dbox-f">
+					<span>
+						<span class="spin" id="reservation_progress" style="display:none"></span>
+					</span>
+					<span>
+						<a href="javascript:void(0)" onclick="hideDialog('reservation');" class="bttn-ghost">Cancel</a>
+						<button name="button" type="submit" onclick="return showIndicator(this)" class="bttn">Create reservation</button>
+					</span>
+				</div>
+			</div>
+
+			<input type="hidden" name="reservation[xpos]" id="reservation_xpos" />
+			<input type="hidden" name="reservation[ypos]" id="reservation_ypos" />
+</form>	</div>
+
+
+
+<div id="pickholder"></div>
+
+<script>
+  
+  var cursor=new Date(Date.UTC(2026,8,27,0)),rp_id=112165,token=177905,view='week',auth_write=true,date_format=0,time_format=1,week_start=0,rounding=60,default_length=3600,role=0,currency="$ ",price_format=0,time_here=new Date/1000-1790510810,local=false
+resource[168169]={data:[0,0,"Room_1",0]}
+resource[168170]={data:[1,0,"Room_2",1]}
+resource[168171]={data:[2,0,"Room_3",2]}
+var filter=168169,start=precalc_constraints('0'),time_select=false,theme=5,orig_url="/schedule/demo/Meeting_Rooms/Room_1"
+  var from_utc = [1805007600,-14400,1793512800,-18000,1772953200,-14400,1762063200,-18000,1741503600,-14400];
+  hotcell= 0
+  var chip_fields = ["description","full_name"]
+  var app=[[1790586000,1790589600,168170,117960050,1,0,0,null,0,1790517600,"",0,"Daily company standup","Demonstration Company"],[1790589600,1790593200,168169,117960051,1,0,0,null,0,1790517600,"",0,"121 Eric-Paul","Demonstration Company"],[1790593200,1790596800,168171,117960052,1,0,0,null,0,1790517600,"",0,"Company update","Demonstration Company"],[1790596800,1790611200,168169,117960053,1,0,0,null,0,1790517600,"1790524800|0",0,"Random meeting with a bunch of people","Demonstration Company"],[1790596800,1790614800,168171,117960054,1,0,0,null,0,1790517600,"",0,"Blocked for photoshoot","Demonstration Company"],[1790604000,1790611200,168170,117960055,1,0,0,null,0,1790517600,"",0,"Team meeting - team 1","Demonstration Company"],[1790672400,1790676000,168170,117960056,1,0,0,null,0,1790517600,"",0,"Daily company standup","Demonstration Company"],[1790676000,1790679600,168169,5918400,1,0,0,null,0,1790517600,"",0,"Team meeting 1",""],[1790679600,1790686800,168170,5918401,1,0,0,null,0,1790517600,"",0,"Team meeting 2",""],[1790683200,1790686800,168169,117960057,1,0,0,null,0,1790517600,"",0,"Random meeting with a bunch of people","Demonstration Company"],[1790686800,1790701200,168171,5918402,1,0,0,null,0,1790517600,"1790524800|0",0,"Team meeting 3",""],[1790694000,1790697600,168169,117960058,1,0,0,null,0,1790517600,"",0,"Block for Sarah","Demonstration Company"],[1790758800,1790762400,168170,117960059,1,0,0,null,0,1790517600,"",0,"Daily company standup","Demonstration Company"],[1790762400,1790766000,168169,5918403,1,0,0,null,0,1790517600,"1790524800|",0,"Team meeting 1",""],[1790766000,1790773200,168170,5918404,1,0,0,null,0,1790517600,"",0,"Team meeting 2",""],[1790769600,1790773200,168169,117960060,1,0,0,null,0,1790517600,"",0,"Random meeting with a bunch of people","Demonstration Company"],[1790769600,1790780400,168171,5918405,1,0,0,null,0,1790517600,"",0,"Team meeting 3",""],[1790780400,1790784000,168169,117960061,1,0,0,null,0,1790517600,"",0,"Blocked for John","Demonstration Company"],[1790845200,1790848800,168170,117960062,1,0,0,null,0,1790517600,"",0,"Daily company standup","Demonstration Company"],[1790852400,1790859600,168170,117960063,1,0,0,null,0,1790517600,"1790524800|0",0,"Brainstorm session","Demonstration Company"],[1790856000,1790859600,168169,117960064,1,0,0,null,0,1790517600,"",0,"Random meeting with a bunch of people","Demonstration Company"],[1790856000,1790874000,168171,117960065,1,0,0,null,0,1790517600,"",0,"Monthly team meeting","Demonstration Company"],[1790859600,1790863200,168169,117960066,1,0,0,null,0,1790517600,"",0,"Company meeting","Demonstration Company"],[1790870400,1790874000,168169,117960067,1,0,0,null,0,1790517600,"",0,"Blocked for John","Demonstration Company"],[1790931600,1790935200,168170,117960068,1,0,0,null,0,1790517600,"",0,"Daily company standup","Demonstration Company"],[1790935200,1790938800,168169,117960069,1,0,0,null,0,1790517600,"",0,"121 John-Sarah","Demonstration Company"],[1790938800,1790942400,168170,117960070,1,0,0,null,0,1790517600,"",0,"Job interview Paul","Demonstration Company"],[1790942400,1790946000,168169,117960071,1,0,0,null,0,1790517600,"",0,"Random meeting with a bunch of people","Demonstration Company"],[1790942400,1790953200,168171,117960072,1,0,0,null,0,1790517600,"",0,"Workshop","Demonstration Company"],[1790946000,1790949600,168170,117960073,1,0,0,null,0,1790517600,"",0,"Blocked for Paul","Demonstration Company"],[1790953200,1790956800,168169,117960074,1,0,0,null,0,1790517600,"",0,"121 Philip-Lisa","Demonstration Company"]]
+</script>
+
+<script>
+  var add_limit = 0, early_limit = 0, early_snap = 0
+  var rp_name = "Meeting_Rooms", buffer = 0, unit_length = 60, int_chk = 2
+  var sync = false
+  var first_hour = 9, last_hour = 19, season = [0,0]
+  var bit_prefs = 2080374846, open_times = [0,540,540,540,540,540,0,1440,1020,1020,1020,1020,1020,1440], cluster = 0, complex = 0, timeline=true
+  var ecache = {data: []}
+  var default_view = 1, time_unit = "minutes", theme = 5, hide_finish = 0
+  var mdir = 0, grid_color = 0, full_color = 0
+  var hide_closed = 1, color_head = 1, month_nav = true
+  var mheight = 82, w_line_height = 52, interval = 2
+  var search_depth = 40, automes= "Click on an available spot to create a new reservation. ";
+    document.observe('dom:loaded', domloaded)
+</script>
+
+
+
+</body>
+</html>

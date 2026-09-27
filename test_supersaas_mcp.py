@@ -190,5 +190,137 @@ class LinkedPageTests(unittest.TestCase):
         self.assertEqual(schedule.rp_id, 823084)
 
 
+class ConstraintParsingTests(unittest.TestCase):
+    def test_positive_tokens_are_minutes_of_day(self):
+        days = module.parse_constraints("570 810 1110", 1800)
+        self.assertEqual(len(days), 7)
+        self.assertTrue(all(day == (570, 810, 1110) for day in days))
+
+    def test_zero_expands_to_the_hourly_grid(self):
+        self.assertEqual(module.parse_constraints("0", 60)[0], tuple(range(0, 1440, 60)))
+
+    def test_negative_tokens_expand_to_repeating_grids(self):
+        self.assertEqual(module.parse_constraints(" -30 0", 600)[0], tuple(range(0, 1440, 30)))
+        self.assertEqual(
+            module.parse_constraints(" -55 -50 -45 -40 -35 -30 -25 -20 -15 -10 -5 0", 60)[0],
+            tuple(range(0, 1440, 5)),
+        )
+
+    def test_grids_are_deduplicated_and_sorted(self):
+        self.assertEqual(module.parse_constraints("810 570 810", 60)[0], (570, 810))
+        self.assertEqual(module.parse_constraints("1440", 60)[0], (0,))
+        self.assertEqual(module.parse_constraints("1440 0", 60)[0], tuple(range(0, 1440, 60)))
+
+    def test_whitespace_runs_do_not_add_a_phantom_grid(self):
+        self.assertEqual(module.parse_constraints("  540   720 ", 60)[0], (540, 720))
+
+    def test_bitmask_overrides_replace_single_weekdays(self):
+        days = module.parse_constraints("540 720:1=60 120", 60)
+        self.assertEqual(days[0], (60, 120))  # Bit 0 is Sunday.
+        self.assertEqual(days[1], (540, 720))
+        days = module.parse_constraints("540:12=300", 60)
+        self.assertEqual((days[0], days[1], days[2], days[3], days[4]),
+                         ((540,), (540,), (300,), (300,), (540,)))
+
+    def test_daily_rounding_keeps_one_start_time(self):
+        self.assertEqual(module.parse_constraints("540 720 900", 86400)[0], (720,))
+        self.assertEqual(module.parse_constraints("540", 86400)[0], (540,))
+        self.assertEqual(len(set(module.parse_constraints("540 720:1=900", 86400))), 1)
+
+    def test_malformed_constraints_raise(self):
+        for text, rounding in [("", 60), ("   ", 60), ("abc", 60), ("-9999", 60),
+                               ("540:1", 60), ("540:x=60", 60), ("540:256=60", 60)]:
+            with self.subTest(text=text):
+                with self.assertRaises(module.ScheduleError):
+                    module.parse_constraints(text, rounding)
+
+
+class MeetingRoomTests(unittest.TestCase):
+    """A public schedule whose declared start time is the bare hourly grid."""
+
+    URL = "https://www.supersaas.com/schedule/demo/Meeting_Rooms/Room_1"
+
+    @classmethod
+    def setUpClass(cls):
+        cls.schedule = module.parse_schedule(
+            (FIXTURES / "meeting-room.html").read_text(errors="replace"), cls.URL)
+        cls.data = json.loads((FIXTURES / "meeting-room-ajax.json").read_text())
+        cls.now = datetime(2026, 9, 27, tzinfo=timezone.utc)
+
+    def test_grid_start_times_expand_before_slot_calculation(self):
+        self.assertEqual(self.schedule.starts[0], tuple(range(0, 1440, 60)))
+        self.assertEqual(self.schedule.duration_seconds, 3600)
+
+    def test_opening_hours_filter_the_grid_to_bookable_hours(self):
+        slots = module.calculate_slots(self.schedule, self.data,
+                                       date(2026, 9, 28), date(2026, 9, 29), now=self.now)
+        self.assertEqual(slots, [
+            {"start": "2026-09-28 09:00", "end": "2026-09-28 10:00"},
+            {"start": "2026-09-28 11:00", "end": "2026-09-28 12:00"},
+            {"start": "2026-09-28 16:00", "end": "2026-09-28 17:00"},
+        ])
+
+    def test_week_reports_every_slot_free_at_midnight_would_not(self):
+        slots = module.calculate_slots(self.schedule, self.data,
+                                       date(2026, 9, 28), date(2026, 10, 3), now=self.now)
+        self.assertEqual(len(slots), 23)
+        self.assertEqual({slot["start"][11:] for slot in slots} & {"00:00"}, set())
+
+    def test_buffer_and_bookings_still_apply_to_grid_starts(self):
+        busy = {"app": [[1790586000, 1790589600, self.schedule.resource_id]], "exc": []}
+        monday = module.calculate_slots(self.schedule, busy,
+                                       date(2026, 9, 28), date(2026, 9, 29), now=self.now)
+        self.assertNotIn({"start": "2026-09-28 09:00", "end": "2026-09-28 10:00"}, monday)
+        self.assertEqual(len(monday), 7)
+        buffered = dataclasses.replace(self.schedule, buffer_seconds=1800)
+        self.assertEqual(len(module.calculate_slots(buffered, self.data,
+                                                    date(2026, 9, 28), date(2026, 10, 3),
+                                                    now=self.now)) < 23, True)
+
+
+class DiagnosticsTests(unittest.TestCase):
+    URL = "https://www.supersaas.com/schedule/demo/Meeting_Rooms"
+
+    def test_schedule_without_published_availability_is_private(self):
+        html = "<html><head><title>User Login</title></head><body></body></html>"
+        with self.assertRaises(module.ScheduleError) as caught:
+            module.parse_schedule(html, self.URL)
+        self.assertIn("behind a login", str(caught.exception))
+
+    def test_opening_hours_without_start_times_report_a_different_cause(self):
+        html = "<script>var open_times = [540, 540, 540, 540, 540, 540, 540, 1080], rp_id = 1</script>"
+        with self.assertRaises(module.ScheduleError) as caught:
+            module.parse_schedule(html, self.URL)
+        self.assertIn("no start times", str(caught.exception))
+
+    def test_resource_picker_names_the_remedy(self):
+        html = ("<script>var start=precalc_constraints('540 720'),"
+                "open_times=[540,540,540,540,540,540,540,1080,1080,1080,1080,1080,1080,1080],"
+                "cluster=0,complex=0,sync=false,filter=0,rp_id=9,token=9,bit_prefs=126,"
+                "default_length=1800,buffer=0,add_limit=0,early_limit=0</script>")
+        with self.assertRaises(module.ScheduleError) as caught:
+            module.parse_schedule(html, self.URL)
+        self.assertIn("pick a resource", str(caught.exception))
+
+    def test_date_only_rental_is_named_rather_than_called_bad_duration(self):
+        html = ("<script>var start=precalc_constraints('720 840'), rounding=86400,"
+                "open_times=[0,0,0,0,0,0,0,1440,1440,1440,1440,1440,1440,1440],"
+                "cluster=0,complex=0,sync=false,filter=405725,rp_id=9,token=9,bit_prefs=126,"
+                "default_length=86400,buffer=0,add_limit=0,early_limit=0,"
+                "resource[405725]={data:[0,0,\"House_1\",5]}</script>")
+        with self.assertRaises(module.ScheduleError) as caught:
+            module.parse_schedule(html, self.URL)
+        self.assertIn("date-only", str(caught.exception))
+
+    def test_a_24_hour_unit_would_return_no_slots_so_the_guard_is_load_bearing(self):
+        schedule = module.parse_schedule(
+            (FIXTURES / "meeting-room.html").read_text(errors="replace"), MeetingRoomTests.URL)
+        schedule = dataclasses.replace(schedule, duration_seconds=86400)
+        data = json.loads((FIXTURES / "meeting-room-ajax.json").read_text())
+        self.assertEqual(module.calculate_slots(schedule, data,
+                                                date(2026, 9, 28), date(2026, 10, 3),
+                                                now=datetime(2026, 9, 27, tzinfo=timezone.utc)), [])
+
+
 if __name__ == "__main__":
     unittest.main()
