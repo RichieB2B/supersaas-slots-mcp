@@ -4,6 +4,8 @@
 
 A read-only MCP server that reports which slots are free on a public SuperSaaS schedule. It covers intraday appointments, date-only schedules such as nightly rentals, and capacity schedules with seats per class. Give it a SuperSaaS schedule URL, or a business page that links to one, such as `https://www.down-the-hatch.nl/reserveren/`. No account or API key is needed.
 
+> **Not the official SuperSaaS MCP server.** SuperSaaS offers its own server at `https://www.supersaas.com/mcp`, which authenticates as your account — via OAuth or a per-account bearer token — and can read *and change* anything the account can: bookings, users, prices, credit balances. Use that one when the goal is managing your own schedules with an AI assistant. This package answers a different question: what is available on **someone else's** public schedule, or on your own as a visitor sees it, without credentials and without touching anything. It reads only pages an anonymous browser can already load, never books, and has no account of any kind. Pick by which side of the counter you are on: SuperSaaS's server is the merchant's till, this one is the window display.
+
 Licensed under the [MIT License](LICENSE). How the schedule data is read is documented in [INTERNALS.md](INTERNALS.md).
 
 ## Install
