@@ -1,22 +1,24 @@
 #!/usr/bin/env python3
-"""Dependency-free, read-only MCP server for public SuperSaaS resource schedules."""
+"""Read-only FastMCP server for public SuperSaaS resource schedules."""
 
 from __future__ import annotations
 
 import json
 import re
-import sys
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from html import unescape
+from typing import Annotated
 from urllib.parse import urlencode, urlsplit
 from urllib.request import Request, urlopen
 
+from fastmcp import FastMCP
+from pydantic import Field
 
-VERSION = "0.1.0"
 MAX_DAYS = 366
 CHUNK_DAYS = 28
 TIMEOUT = 20
+mcp = FastMCP("supersaas-slots", version="0.1.0")
 
 
 class ScheduleError(ValueError):
@@ -191,8 +193,20 @@ def calculate_slots(schedule: Schedule, data: dict, start: date, stop: date,
     return slots
 
 
-def find_available_slots(schedule_url: str, from_date: str, through_date: str,
-                         max_results: int = 500, respect_booking_window: bool = True) -> dict:
+@mcp.tool(annotations={"readOnlyHint": True, "openWorldHint": True})
+def find_available_slots(
+    schedule_url: Annotated[str, Field(description="Public HTTPS SuperSaaS /schedule/ URL")],
+    from_date: Annotated[str, Field(description="First date, YYYY-MM-DD")],
+    through_date: Annotated[str, Field(description="Last date, inclusive, YYYY-MM-DD")],
+    max_results: Annotated[int, Field(description="Maximum number of slots returned", ge=1, le=2000)] = 500,
+    respect_booking_window: Annotated[bool, Field(description="Apply minimum and maximum advance-booking limits")] = True,
+) -> dict:
+    """List available slots in a public, single-resource SuperSaaS schedule.
+
+    Supports explicit numeric start times, fixed duration, weekly opening
+    hours, exceptions, booked appointments, and booking-window limits.
+    Unsupported schedule rules are reported as errors.
+    """
     _validate_url(schedule_url)
     try:
         start = date.fromisoformat(from_date)
@@ -230,81 +244,8 @@ def find_available_slots(schedule_url: str, from_date: str, through_date: str,
     return result
 
 
-TOOL = {
-    "name": "find_available_slots",
-    "description": "Read a public SuperSaaS resource schedule and list its available appointment slots for an inclusive date range. Supports fixed numeric start times and one resource; reports unsupported schedule rules explicitly.",
-    "inputSchema": {
-        "type": "object", "additionalProperties": False,
-        "properties": {
-            "schedule_url": {"type": "string", "description": "Public HTTPS SuperSaaS /schedule/ URL"},
-            "from_date": {"type": "string", "description": "First date, YYYY-MM-DD"},
-            "through_date": {"type": "string", "description": "Last date, inclusive, YYYY-MM-DD"},
-            "max_results": {"type": "integer", "minimum": 1, "maximum": 2000, "default": 500},
-            "respect_booking_window": {"type": "boolean", "default": True,
-                "description": "Apply the page's minimum/maximum advance booking limits"},
-        },
-        "required": ["schedule_url", "from_date", "through_date"],
-    },
-}
-
-
-def _response(request_id, *, result=None, error=None):
-    payload = {"jsonrpc": "2.0", "id": request_id}
-    payload["error" if error is not None else "result"] = error if error is not None else result
-    return payload
-
-
-def _handle(message: dict):
-    method = message.get("method")
-    request_id = message.get("id")
-    if request_id is None:
-        return None  # notifications, including notifications/initialized
-    if method == "initialize":
-        requested = message.get("params", {}).get("protocolVersion", "2025-03-26")
-        version = requested if requested in {"2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"} else "2025-11-25"
-        return _response(request_id, result={
-            "protocolVersion": version, "capabilities": {"tools": {}},
-            "serverInfo": {"name": "supersaas-slots", "version": VERSION},
-        })
-    if method == "ping":
-        return _response(request_id, result={})
-    if method == "tools/list":
-        return _response(request_id, result={"tools": [TOOL]})
-    if method == "tools/call":
-        params = message.get("params", {})
-        if params.get("name") != TOOL["name"]:
-            return _response(request_id, error={"code": -32602, "message": "Unknown tool"})
-        args = params.get("arguments", {})
-        if not isinstance(args, dict):
-            return _response(request_id, error={"code": -32602, "message": "Invalid arguments"})
-        try:
-            result = find_available_slots(**args)
-            return _response(request_id, result={
-                "content": [{"type": "text", "text": json.dumps(result, ensure_ascii=False)}],
-                "structuredContent": result,
-            })
-        except (ScheduleError, TypeError, OSError) as exc:
-            return _response(request_id, result={
-                "content": [{"type": "text", "text": str(exc)}], "isError": True,
-            })
-    return _response(request_id, error={"code": -32601, "message": "Method not found"})
-
-
 def main() -> None:
-    for line in sys.stdin:
-        try:
-            message = json.loads(line)
-            if not isinstance(message, dict):
-                raise ValueError("Message must be an object")
-            response = _handle(message)
-        except (json.JSONDecodeError, ValueError) as exc:
-            response = _response(None, error={"code": -32700, "message": str(exc)})
-        except Exception as exc:  # Keep the process alive; never mix logs with protocol output.
-            print(f"Unexpected server error: {exc}", file=sys.stderr)
-            response = _response(message.get("id") if isinstance(message, dict) else None,
-                                 error={"code": -32603, "message": "Internal error"})
-        if response is not None:
-            print(json.dumps(response, separators=(",", ":"), ensure_ascii=False), flush=True)
+    mcp.run(show_banner=False)
 
 
 if __name__ == "__main__":

@@ -1,23 +1,33 @@
 # SuperSaaS slots MCP server
 
-A read-only, dependency-free Python MCP server for public **resource** schedules with one resource and explicit numeric start times. It downloads the public schedule page, extracts `rp_id`, `token`, `bit_prefs`, `open_times`, appointment duration, buffer, and start-time constraints, then calls `/ajax/resource/<rp_id>` in 28-day windows. Each call explicitly requests the exception list with `efrom`, `eto`, and `ed=r`. No account or API key is needed for the tested public page.
+A read-only FastMCP server for public **resource** schedules with one resource and explicit numeric start times. It downloads the public schedule page, extracts `rp_id`, `token`, `bit_prefs`, `open_times`, appointment duration, buffer, and start-time constraints, then calls `/ajax/resource/<rp_id>` in 28-day windows. Each call explicitly requests the exception list with `efrom`, `eto`, and `ed=r`. No account or API key is needed for the tested public page.
+
+## Install
+
+From the project directory, use Python 3.10+:
+
+```sh
+python3 -m venv .venv
+.venv/bin/python -m pip install -e .
+```
+
+Dependencies are declared in `pyproject.toml`; FastMCP is pinned to version 4.0.10. This creates the `supersaas-slots` command in `.venv/bin`.
 
 ## Connect
 
-Use Python 3.10+ and configure a stdio MCP server in your MCP client:
+Configure a stdio MCP server in your MCP client:
 
 ```json
 {
   "mcpServers": {
     "supersaas-slots": {
-      "command": "python3",
-      "args": ["/Users/richard/Documents/Codex/2026-09-27/th/outputs/supersaas-mcp/supersaas_mcp.py"]
+      "command": "/absolute/path/to/supersaas-mcp/.venv/bin/supersaas-slots"
     }
   }
 }
 ```
 
-The client must allow this local process to make HTTPS requests to `www.supersaas.nl` (or `www.supersaas.com`). The server writes MCP JSON-RPC to stdout and diagnostics to stderr.
+Replace the command path with the absolute path to your project directory. The client must allow this local process to make HTTPS requests to `www.supersaas.nl` (or `www.supersaas.com`). FastMCP handles the stdio protocol; the availability calculation remains in `supersaas_mcp.py`.
 
 ## Tool
 
@@ -46,8 +56,7 @@ This server handles the tested resource-schedule shape: one resource, fixed dura
 ## Test
 
 ```sh
-cd /Users/richard/Documents/Codex/2026-09-27/th/outputs/supersaas-mcp
-python3 -m unittest -v test_supersaas_mcp.py
+.venv/bin/python -m unittest -v test_supersaas_mcp.py
 ```
 
 The tests use the included copies of your example files. A live read-only call against the example schedule also returned the expected October 22 slot on 2026-09-27.

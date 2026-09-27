@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=80"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "supersaas-slots-mcp"
+version = "0.1.0"
+description = "Read-only MCP tool for public SuperSaaS resource availability"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "fastmcp==4.0.10",
+    "pydantic>=2,<3",
+]
+
+[project.scripts]
+supersaas-slots = "supersaas_mcp:main"
+
+[tool.setuptools]
+py-modules = ["supersaas_mcp"]

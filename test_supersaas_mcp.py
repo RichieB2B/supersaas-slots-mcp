@@ -3,6 +3,7 @@
 import importlib.util
 import json
 import pathlib
+import select
 import subprocess
 import sys
 import unittest
@@ -65,22 +66,33 @@ class ScheduleTests(unittest.TestCase):
         self.assertIn("ed=r", url)
 
     def test_stdio_handshake_and_tool_list(self):
-        messages = [
-            {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
-                "protocolVersion": "2025-11-25", "capabilities": {},
-                "clientInfo": {"name": "test", "version": "1"}}},
-            {"jsonrpc": "2.0", "method": "notifications/initialized"},
-            {"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
-        ]
-        process = subprocess.run(
+        process = subprocess.Popen(
             [sys.executable, str(MODULE_PATH)],
-            input="\n".join(map(json.dumps, messages)) + "\n", text=True,
-            capture_output=True, check=True,
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            text=True,
         )
-        responses = [json.loads(line) for line in process.stdout.splitlines()]
-        self.assertEqual(len(responses), 2)
-        self.assertEqual(responses[0]["result"]["protocolVersion"], "2025-11-25")
-        self.assertEqual(responses[1]["result"]["tools"][0]["name"], "find_available_slots")
+        def exchange(message):
+            process.stdin.write(json.dumps(message) + "\n")
+            process.stdin.flush()
+            ready, _, _ = select.select([process.stdout], [], [], 10)
+            self.assertTrue(ready, "MCP server did not respond within 10 seconds")
+            return json.loads(process.stdout.readline())
+
+        try:
+            initialized = exchange({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
+                "protocolVersion": "2025-11-25", "capabilities": {},
+                "clientInfo": {"name": "test", "version": "1"}}})
+            process.stdin.write(json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}) + "\n")
+            process.stdin.flush()
+            listed = exchange({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
+            self.assertEqual(initialized["result"]["protocolVersion"], "2025-11-25")
+            self.assertEqual(initialized["result"]["serverInfo"]["version"], "0.1.0")
+            self.assertEqual(listed["result"]["tools"][0]["name"], "find_available_slots")
+        finally:
+            process.stdin.close()
+            process.wait(timeout=10)
+            process.stdout.close()
+            process.stderr.close()
 
 
 if __name__ == "__main__":
