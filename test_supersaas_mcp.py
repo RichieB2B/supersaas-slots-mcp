@@ -457,6 +457,96 @@ class ResponseShapeTests(unittest.TestCase):
             self.assertNotIn(key, result)
 
 
+class CapacityScheduleTests(unittest.TestCase):
+    URL = "https://www.supersaas.nl/schedule/Jazzercise"
+    PAGE = (b'<script src="/assets/capacity-82a8c6eb1aa8b01938164e40c3a9dcb1684782bf5ea65e0c0b9752b635bfced4.js"></script>'
+            b'<script>var rp_id=508523,token=866123,overbooking=3,app=[],add_limit=0,sync=false,first_hour=9,'
+            b'from_utc=[1806195600,3600,1792890000,0,1774746000,3600,1761440400,0]</script>')
+
+    @staticmethod
+    def row(day, hour, slot_id, capacity, booked, title="Jazzercise", location="Village Hall",
+            waiting=0):
+        begin = int(datetime(2026, 10, day, hour, tzinfo=timezone.utc).timestamp())
+        return [begin, begin + 3600, slot_id, capacity, booked, 3, 14,
+                title, "", waiting, location, 0]
+
+    def test_capacity_page_and_ajax_url(self):
+        schedule = module.parse_schedule(self.PAGE.decode(), self.URL)
+        self.assertIsInstance(schedule, module.CapacitySchedule)
+        self.assertEqual(schedule.rp_id, 508523)
+        self.assertEqual(schedule.utc_offsets[2], (1774746000, 3600))
+        url = module.ajax_url(schedule, date(2026, 10, 1), date(2026, 10, 8))
+        self.assertIn("/ajax/capacity/508523?v=12&token=866123", url)
+        self.assertIn("afrom=2026-10-01&ato=2026-10-08", url)
+
+    def test_saved_jazzercise_ajax_response(self):
+        schedule = module.parse_schedule(self.PAGE.decode(), self.URL)
+        data = json.loads((FIXTURES / "jazzercise-capacity-ajax.json").read_text())
+        slots = module.calculate_capacity_slots(
+            schedule, data, date(2026, 9, 27), date(2026, 10, 5),
+            now=datetime(2026, 9, 27, tzinfo=timezone.utc))
+        self.assertEqual(len(slots), 13)
+        self.assertEqual(slots[0]["id"], 73524942)
+        self.assertEqual(slots[0]["start"], "2026-09-28 19:00")
+        self.assertEqual(slots[0]["available"], 8)
+        self.assertEqual(slots[0]["waiting"], 0)
+        self.assertEqual(slots[-1]["capacity"], 20)
+        self.assertEqual(slots[-1]["available"], 7)
+
+    def test_remaining_seats_and_class_metadata(self):
+        schedule = module.parse_schedule(self.PAGE.decode(), self.URL)
+        rows = [
+            self.row(1, 19, 101, 40, 32, "CardioSculpt", "Black Notley Village Hall"),
+            self.row(1, 20, 102, 40, 40),
+            self.row(2, 9, 103, -1, 8),
+            self.row(2, 10, 104, 0, 0),
+            self.row(2, 11, 105, 20, -2),
+            self.row(2, 12, 107, 40, 40, waiting=2),
+            self.row(8, 9, 106, 40, 0),
+        ]
+        slots = module.calculate_capacity_slots(
+            schedule, {"app": rows}, date(2026, 10, 1), date(2026, 10, 8),
+            now=datetime(2026, 9, 27, tzinfo=timezone.utc))
+        self.assertEqual(slots, [
+            {"id": 101, "start": "2026-10-01 19:00", "end": "2026-10-01 20:00",
+             "title": "CardioSculpt", "location": "Black Notley Village Hall",
+             "capacity": 40, "booked": 32, "waiting": 0, "available": 8},
+            {"id": 103, "start": "2026-10-02 09:00", "end": "2026-10-02 10:00",
+             "title": "Jazzercise", "location": "Village Hall",
+             "capacity": None, "booked": 8, "waiting": 0, "available": None},
+            {"id": 107, "start": "2026-10-02 12:00", "end": "2026-10-02 13:00",
+             "title": "Jazzercise", "location": "Village Hall",
+             "capacity": 40, "booked": 40, "waiting": 2, "available": 2},
+        ])
+
+    def test_capacity_response_is_counted_and_truncated(self):
+        rows = [self.row(1, 19, 101, 40, 32), self.row(2, 9, 103, 40, 17)]
+        ajax = json.dumps({"app": rows}).encode()
+        with mock.patch.object(module, "_get", side_effect=[
+            (self.PAGE, self.URL), (ajax, "https://www.supersaas.nl/ajax/capacity/508523")
+        ]):
+            result = module.find_available_slots(self.URL, "2026-10-01", "2026-10-07",
+                                                 max_results=1)
+        self.assertEqual(result["unit"], "class")
+        self.assertEqual(result["count"], 2)
+        self.assertTrue(result["truncated"])
+        self.assertEqual(result["slots"][0]["available"], 8)
+        self.assertNotIn("duration_minutes", result)
+
+    def test_capacity_window_and_malformed_rows(self):
+        schedule = dataclasses.replace(module.parse_schedule(self.PAGE.decode(), self.URL),
+                                       add_limit=3600, early_limit=86400)
+        now = datetime(2026, 10, 1, 17, tzinfo=timezone.utc)
+        rows = [self.row(1, 18, 101, 40, 1), self.row(1, 19, 102, 40, 1),
+                self.row(2, 19, 103, 40, 1)]
+        slots = module.calculate_capacity_slots(schedule, {"app": rows},
+                                                date(2026, 10, 1), date(2026, 10, 3), now=now)
+        self.assertEqual([slot["id"] for slot in slots], [102])
+        with self.assertRaisesRegex(module.ScheduleError, "Malformed capacity slot"):
+            module.calculate_capacity_slots(schedule, {"app": [[1, 2]]},
+                                            date(2026, 10, 1), date(2026, 10, 3), now=now)
+
+
 class HostCanonicalisationTests(unittest.TestCase):
     SLEEP = "https://www.supersaas.nl/schedule/downthehatch/SLEEP"
 
@@ -518,12 +608,11 @@ class ScheduleTypeTests(unittest.TestCase):
     SERVICE = ('<script src="/assets/service-0123456789abcdef0123456789abcdef.js"></script>'
                "<script>var open_times=[540,540,540,540,540,540,540,1080,1080,1080,1080,1080,1080,1080]</script>")
 
-    def test_capacity_schedule_is_named_as_a_class_or_group_event(self):
+    def test_capacity_schedule_without_public_slots_is_rejected(self):
         with self.assertRaises(module.ScheduleError) as caught:
             module.parse_schedule(self.CAPACITY, self.URL)
         message = str(caught.exception)
-        self.assertIn("capacity schedule", message)
-        self.assertIn("seats per class", message)
+        self.assertIn("publishes no public slots", message)
 
     def test_service_schedule_is_named_separately(self):
         with self.assertRaises(module.ScheduleError) as caught:

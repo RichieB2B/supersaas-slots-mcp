@@ -2,7 +2,7 @@
 
 <!-- mcp-name: io.github.RichieB2B/supersaas-slots-mcp -->
 
-A read-only MCP server that reports which slots are free on a public SuperSaaS schedule. It covers both intraday appointment slots and date-only schedules such as nightly rentals. Give it a SuperSaaS schedule URL, or a business page that links to one, such as `https://www.down-the-hatch.nl/reserveren/`. No account or API key is needed.
+A read-only MCP server that reports which slots are free on a public SuperSaaS schedule. It covers intraday appointments, date-only schedules such as nightly rentals, and capacity schedules with seats per class. Give it a SuperSaaS schedule URL, or a business page that links to one, such as `https://www.down-the-hatch.nl/reserveren/`. No account or API key is needed.
 
 Licensed under the [MIT License](LICENSE). How the schedule data is read is documented in [INTERNALS.md](INTERNALS.md).
 
@@ -92,7 +92,7 @@ Or run it from PyPI with `uvx`:
 
 Times are schedule wall-clock strings, `YYYY-MM-DD HH:MM`. `truncated` describes `slots` only, so compare it against `count` before treating a list as complete. Data is re-fetched on every call, so results change as other people book.
 
-`unit` is either `slot` or `night`. Appointment schedules return `slot` with `duration_minutes` set to the appointment length. Date-only schedules such as rentals return `night` and add three fields:
+`unit` is `slot`, `night`, or `class`. Appointment schedules return `slot` with `duration_minutes` set to the appointment length. Date-only schedules such as rentals return `night` and add three fields:
 
 ```json
 {
@@ -107,6 +107,27 @@ Times are schedule wall-clock strings, `YYYY-MM-DD HH:MM`. `truncated` describes
 
 Each `slots` entry is one night, from check-in on a date to check-out on the next; `duration_minutes` is the nominal 1440-minute night. `stays` merges consecutive free nights into the ranges you can actually book, so four adjacent nights become one four-night stay. Use `slots` when pricing per night and `stays` when offering a date range to the customer.
 
+Capacity schedules, such as [Jazzercise](https://www.supersaas.nl/schedule/Jazzercise), return `unit: "class"` and one entry per class with an ordinary seat available:
+
+```json
+{
+  "unit": "class",
+  "slots": [{
+    "id": 101,
+    "start": "2026-10-01 19:00",
+    "end": "2026-10-01 20:00",
+    "title": "CardioSculpt",
+    "location": "Village Hall",
+    "capacity": 40,
+    "booked": 32,
+    "waiting": 0,
+    "available": 8
+  }]
+}
+```
+
+The class `id` is SuperSaaS's slot ID. A class with unlimited capacity has `null` for `capacity` and `available`. SuperSaaS includes waiting-list places in `booked`, so `available` is `capacity - booked + waiting`. Classes without an ordinary seat are excluded, even when the schedule offers a waiting list. Class lengths can vary, so there is no top-level `duration_minutes` in this mode.
+
 ### Errors
 
 Every error names a cause, and most have a remedy:
@@ -116,7 +137,7 @@ Every error names a cause, and most have a remedy:
 | Page asks the visitor to pick a resource | Pass one resource URL, such as `.../Meeting_Rooms/Room_1` or `.../Rental_Homes/House_1`. |
 | Page links to several schedules | The message lists them; pass the intended one directly. |
 | Schedule is kept behind a login | Nothing to do — the schedule is not public. |
-| This is a capacity schedule | Classes and group events count seats, not time slots. Nothing to do — find the resource schedule for the same business if there is one. |
+| Capacity schedule publishes no public slots | The schedule does not expose class data without a login. |
 | This is a service schedule | A catalogue of services booked across shared staff. Nothing to do. |
 | Schedule declares no start-time grid | Visitors pick their own start and end times, so there is no fixed grid. Nothing to do. |
 | Schedule publishes opening hours but no start times | Nothing to do — slots are generated per request. |
@@ -124,9 +145,9 @@ Every error names a cause, and most have a remedy:
 
 ## Scope
 
-Supported: public **resource** schedules with a single resource, fixed appointment duration, weekly opening hours with per-day exceptions and blocked ranges, booked appointments, buffer time, advance-booking limits, and both slot and night units.
+Supported: public **resource** schedules with a single resource, fixed appointment duration, weekly opening hours with per-day exceptions and blocked ranges, booked appointments, buffer time, advance-booking limits, and both slot and night units. Public **capacity** schedules list classes with available seats, including each class's title, location, capacity, booked and waiting counts, and remaining seats.
 
-SuperSaaS offers three schedule types and only resource schedules are supported; capacity and service schedules are reported as such rather than as a parse failure. Also not modeled: recurring rules, per-user limits, minimum-stay rules, and payment-dependent availability. An available slot is a calculated candidate, not a booking guarantee — the booking page remains authoritative at reservation time.
+SuperSaaS offers three schedule types; service schedules are reported as unsupported. Also not modeled: recurring rules, per-user limits, minimum-stay rules, and payment-dependent availability. An available slot is a calculated candidate, not a booking guarantee — the booking page remains authoritative at reservation time.
 
 ## Development
 
@@ -135,7 +156,7 @@ SuperSaaS offers three schedule types and only resource schedules are supported;
 .venv/bin/python check_release.py
 ```
 
-The tests run offline against saved copies of three real schedules, so they do not drift as customers book. See [INTERNALS.md](INTERNALS.md#fixtures) for what each fixture pins.
+The tests run offline against saved copies of three real resource schedules and a Jazzercise capacity response, so they do not drift as customers book. See [INTERNALS.md](INTERNALS.md#fixtures) for what each fixture pins.
 
 ## Release
 

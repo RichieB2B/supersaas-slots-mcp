@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read-only FastMCP server for public SuperSaaS resource schedules."""
+"""Read-only FastMCP server for public SuperSaaS schedules."""
 
 from __future__ import annotations
 
@@ -59,6 +59,16 @@ class Schedule:
     checkout_minute: int = 0
 
 
+@dataclass(frozen=True)
+class CapacitySchedule:
+    page_url: str
+    rp_id: int
+    token: int
+    add_limit: int
+    early_limit: int
+    utc_offsets: tuple[tuple[int, int], ...] = ()
+
+
 def _number(source: str, name: str) -> int:
     match = re.search(r"\b" + re.escape(name) + r"\s*=\s*(\d+)\b", source)
     if not match:
@@ -85,7 +95,10 @@ def _validate_schedule_url(url: str) -> str:
 
 
 def _get(url: str) -> tuple[bytes, str]:
-    req = Request(url, headers={"User-Agent": "supersaas-slots-mcp/0.1", "Accept": "text/html, application/json"})
+    req = Request(url, headers={
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/125.0 Safari/537.36",
+        "Accept": "text/html, application/json",
+    })
     try:
         with urlopen(req, timeout=TIMEOUT) as response:
             final_url = response.geturl()
@@ -148,7 +161,7 @@ def resolve_schedule_url(url: str) -> tuple[str, str | None]:
     return _canonical_schedule_url(_validate_schedule_url(links[0])), page_url
 
 
-def load_schedule(url: str) -> tuple[Schedule, str]:
+def load_schedule(url: str) -> tuple[Schedule | CapacitySchedule, str]:
     _validate_schedule_url(url)
     body, final_url = _get(url)
     if urlsplit(final_url).hostname not in SCHEDULE_HOSTS:
@@ -253,9 +266,42 @@ def _missing_constraints_error(source: str) -> ScheduleError:
     )
 
 
-def parse_schedule(html: str, page_url: str) -> Schedule:
+def _optional_number(source: str, name: str, default: int = 0) -> int:
+    match = re.search(r"\b" + re.escape(name) + r"\s*=\s*(\d+)\b", source)
+    return int(match.group(1)) if match else default
+
+
+def parse_capacity_schedule(source: str, page_url: str) -> CapacitySchedule:
+    """Read the public identifiers used by SuperSaaS's capacity AJAX path."""
+    if not re.search(r"\bapp\s*=\s*\[", source):
+        raise ScheduleError("This capacity schedule publishes no public slots.")
+    if re.search(r"\bsync\s*=\s*true", source):
+        raise ScheduleError("Synchronized capacity schedules are not supported.")
+    offsets_match = re.search(r"\bfrom_utc\s*=\s*(\[[^\]]*\])", source, re.S)
+    offsets = ()
+    if offsets_match:
+        try:
+            values = json.loads(offsets_match.group(1))
+        except json.JSONDecodeError as exc:
+            raise ScheduleError("Cannot parse capacity schedule timezone offsets.") from exc
+        if (not isinstance(values, list) or len(values) % 2
+                or any(type(value) is not int for value in values)):
+            raise ScheduleError("Invalid capacity schedule timezone offsets.")
+        offsets = tuple(zip(values[::2], values[1::2]))
+    return CapacitySchedule(
+        page_url=page_url, rp_id=_number(source, "rp_id"),
+        token=_number(source, "token"), add_limit=_optional_number(source, "add_limit"),
+        early_limit=_optional_number(source, "early_limit"),
+        utc_offsets=offsets,
+    )
+
+
+def parse_schedule(html: str, page_url: str) -> Schedule | CapacitySchedule:
     _validate_schedule_url(page_url)
     source = unescape(html)
+    kinds = set(SCHEDULE_ASSET.findall(source))
+    if "capacity" in kinds and "resource" not in kinds:
+        return parse_capacity_schedule(source, page_url)
     start_match = re.search(r"\bstart\s*=\s*precalc_constraints\(\s*(['\"])(.*?)\1\s*\)", source, re.S)
     if not start_match:
         raise _missing_constraints_error(source)
@@ -318,7 +364,14 @@ def parse_schedule(html: str, page_url: str) -> Schedule:
     )
 
 
-def ajax_url(schedule: Schedule, start: date, stop: date) -> str:
+def ajax_url(schedule: Schedule | CapacitySchedule, start: date, stop: date) -> str:
+    if isinstance(schedule, CapacitySchedule):
+        values = {
+            "v": "12", "token": str(schedule.token),
+            "afrom": start.isoformat(), "ato": stop.isoformat(),
+        }
+        origin = urlsplit(schedule.page_url)
+        return f"{origin.scheme}://{origin.netloc}/ajax/capacity/{schedule.rp_id}?{urlencode(values)}"
     values = {
         "v": "12", "token": str(schedule.token),
         "afrom": start.isoformat() + " 00:00", "ato": stop.isoformat() + " 00:00",
@@ -328,6 +381,63 @@ def ajax_url(schedule: Schedule, start: date, stop: date) -> str:
     }
     origin = urlsplit(schedule.page_url)
     return f"{origin.scheme}://{origin.netloc}/ajax/resource/{schedule.rp_id}?{urlencode(values)}"
+
+
+def calculate_capacity_slots(schedule: CapacitySchedule, data: dict, start: date, stop: date,
+                             *, now: datetime | None = None,
+                             respect_booking_window: bool = True) -> list[dict]:
+    """List public class slots that still have at least one ordinary seat."""
+    rows = data.get("app")
+    if not isinstance(rows, list):
+        raise ScheduleError("Capacity AJAX response lacks a slot array.")
+    if now is None:
+        now = datetime.now(timezone.utc)
+    if now.tzinfo is None:
+        raise ScheduleError("now must be timezone-aware.")
+    lower = int(datetime(start.year, start.month, start.day, tzinfo=timezone.utc).timestamp())
+    upper = int(datetime(stop.year, stop.month, stop.day, tzinfo=timezone.utc).timestamp())
+    now_s = now.timestamp()
+    # Capacity epochs are encoded as schedule wall time. The page's from_utc
+    # table maps real UTC time to that wall clock, including DST transitions.
+    for transition, offset in schedule.utc_offsets:
+        if now_s >= transition:
+            now_s += offset
+            break
+    slots = []
+    for row in rows:
+        if (not isinstance(row, list) or len(row) < 11
+                or any(type(row[i]) is not int for i in range(5))
+                or row[1] <= row[0] or row[2] <= 0
+                or type(row[9]) is not int or row[9] < 0
+                or not isinstance(row[7], str) or not isinstance(row[10], str)):
+            raise ScheduleError("Malformed capacity slot in AJAX response.")
+        begin, finish, slot_id, capacity, booked = row[:5]
+        waiting = row[9]
+        if not lower <= begin < upper:
+            continue
+        # -1 means unlimited capacity. Other non-positive capacities and a
+        # negative booking count indicate a slot unavailable for normal booking.
+        # SuperSaaS includes waitlisted places in `booked`, then adds them back
+        # when calculating ordinary seats still free.
+        available = None if capacity == -1 else capacity - booked + waiting
+        if capacity != -1 and (capacity <= 0 or available <= 0):
+            continue
+        if booked < 0 or waiting > booked:
+            continue
+        if respect_booking_window:
+            if begin < now_s or schedule.add_limit and begin < now_s + schedule.add_limit:
+                continue
+            if schedule.early_limit and begin > now_s + schedule.early_limit:
+                continue
+        slots.append({
+            "id": slot_id,
+            "start": datetime.fromtimestamp(begin, timezone.utc).strftime("%Y-%m-%d %H:%M"),
+            "end": datetime.fromtimestamp(finish, timezone.utc).strftime("%Y-%m-%d %H:%M"),
+            "title": row[7], "location": row[10],
+            "capacity": None if capacity == -1 else capacity,
+            "booked": booked, "waiting": waiting, "available": available,
+        })
+    return slots
 
 
 def _periods(schedule: Schedule, day: date, exceptions: list[list]) -> list[tuple[int, int]]:
@@ -434,13 +544,14 @@ def find_available_slots(
     max_results: Annotated[int, Field(description="Maximum number of slots returned", ge=1, le=2000)] = 500,
     respect_booking_window: Annotated[bool, Field(description="Apply minimum and maximum advance-booking limits")] = True,
 ) -> dict:
-    """List available slots in a public, single-resource SuperSaaS schedule.
+    """List available slots in a public SuperSaaS resource or capacity schedule.
 
     Accepts a SuperSaaS schedule URL directly, or any public HTTPS page that
     links to exactly one schedule on supersaas.nl or supersaas.com, such as a
     salon's own booking page. Supports explicit, repeating-grid, and per-weekday
     start times, fixed duration, weekly opening hours, exceptions, booked
-    appointments, buffer time, and booking-window limits. Date-only schedules
+    appointments, buffer time, and booking-window limits. Capacity schedules
+    list classes with remaining seats, their titles, locations, and counts. Date-only schedules
     such as nightly rentals report whole nights from check-in to check-out and
     add a `stays` summary of merged consecutive nights. Unsupported schedule
     rules are reported as errors.
@@ -468,9 +579,25 @@ def find_available_slots(
             data = json.loads(body)
         except json.JSONDecodeError as exc:
             raise ScheduleError("SuperSaaS AJAX response was not JSON.") from exc
-        all_slots.extend(calculate_slots(schedule, data, cursor, chunk_end,
-                                         now=now, respect_booking_window=respect_booking_window))
+        if isinstance(schedule, CapacitySchedule):
+            all_slots.extend(calculate_capacity_slots(
+                schedule, data, cursor, chunk_end,
+                now=now, respect_booking_window=respect_booking_window))
+        else:
+            all_slots.extend(calculate_slots(schedule, data, cursor, chunk_end,
+                                             now=now, respect_booking_window=respect_booking_window))
         cursor = chunk_end
+    if isinstance(schedule, CapacitySchedule):
+        all_slots.sort(key=lambda slot: (slot["start"], slot["id"]))
+        result = {
+            "schedule_url": final_url, "from_date": from_date, "through_date": through_date,
+            "time_basis": "schedule wall time; epoch values interpreted as UTC",
+            "unit": "class", "count": len(all_slots),
+            "truncated": len(all_slots) > max_results, "slots": all_slots[:max_results],
+        }
+        if linked_from:
+            result["linked_from"] = linked_from
+        return result
     result = {
         "schedule_url": final_url, "from_date": from_date, "through_date": through_date,
         "time_basis": "schedule wall time; epoch values interpreted as UTC",

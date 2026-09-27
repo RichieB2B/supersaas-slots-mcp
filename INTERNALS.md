@@ -2,7 +2,7 @@
 
 How `supersaas_mcp.py` turns a public SuperSaaS page into a slot list. Read [README.md](README.md) for installation and the tool contract.
 
-There is no public API for this. SuperSaaS renders each schedule page with its own booking script inline, so the server scrapes the configuration out of that script, calls the same endpoint the browser would, and re-implements the availability arithmetic. Everything below was derived from live pages; the three saved fixtures in [`fixtures/`](#fixtures) pin the shapes.
+The server reads the public page configuration and calls the same AJAX endpoint as the browser. Resource schedules require availability arithmetic; capacity schedules publish explicit classes and counts. The fixtures in [`fixtures/`](#fixtures) pin the observed resource and Jazzercise capacity response shapes.
 
 ## Page model
 
@@ -63,7 +63,13 @@ Dropping the query matters beyond tidiness: view parameters such as `?view=week`
 
 `SCHEDULE_ASSET` matches `/assets/(resource|capacity|service)-<hex>.js`, the script SuperSaaS loads per schedule type. It is the clean discriminator: capacity pages carry `overbooking`, `first_hour` and `rp_name` instead of `filter` and `resource[]`, and no `precalc_constraints` at all. The asset name is not entity-encoded, so it matches identically before and after `unescape()`.
 
-Each page references the script twice — the CDN form plus an inline `document.write` local fallback — which is why the check collects a `set`. The asset test is the **first** branch of `_missing_constraints_error()`, ahead of the missing-data checks: a capacity page does publish `open_times`, so testing for opening hours first would misreport a whole schedule type as a malformed resource schedule. Six of fourteen customer schedules sampled were capacity type.
+Each page references the script twice — the CDN form plus an inline `document.write` local fallback — which is why the check collects a `set`. Capacity pages go through `parse_capacity_schedule()` before the resource start-time parser. Service pages still raise a type-specific error. Six of fourteen customer schedules sampled were capacity type.
+
+### Capacity schedules
+
+Jazzercise publishes `rp_id`, `token`, `add_limit`, `from_utc`, and an inline `app` array. The page script fetches further classes from `/ajax/capacity/<rp_id>` with `token`, `afrom`, and `ato`. The server uses that endpoint for each 28-day chunk. Its `app` rows use `[start_epoch, end_epoch, slot_id, capacity, booked, ..., title, ..., waiting, location, ...]`. Epochs represent schedule wall time, as on resource pages. `from_utc` converts the current UTC time to schedule wall time for booking-window checks. `capacity -1` means unlimited; other non-positive capacities, negative booked values, and classes without a normal seat are excluded. SuperSaaS includes waitlisted places in `booked`, so remaining ordinary seats are `capacity - booked + waiting`.
+
+Capacity entries preserve the class ID, title, location, capacity, booked and waiting counts, and remaining seats. The page's `add_limit` and optional `early_limit` are applied when booking-window filtering is enabled. Class length is per row, so the top-level response has no fixed duration.
 
 Availability is fetched from `/ajax/resource/<rp_id>` with `v=12`, `token`, `afrom`, `ato`, `ad=r`, `efrom=1970-01-01`, `eto`, `ed=r`. Requests are chunked to `CHUNK_DAYS` = 28 days, capped at `MAX_DAYS` = 366.
 
@@ -116,7 +122,8 @@ Each rejection exists because the alternative is a wrong answer rather than an e
 | --- | --- | --- |
 | `cluster`, `complex`, `sync` set | Unsupported feature | Availability depends on rules not present in the page. |
 | `filter=0` | Pick a resource | The page has no single resource to compute for. |
-| Capacity or service asset | Schedule type unsupported | Seats and shared-staff services come from a different endpoint. |
+| Capacity page without public `app` | No public slots | The page does not expose class data. |
+| Service asset | Schedule type unsupported | Shared-staff services come from a different endpoint. |
 | `precalc_constraints('')` | No start-time grid | Visitors pick their own times, so there is no fixed grid to replay. |
 | No `open_times` at all | Behind a login | SuperSaaS returns HTTP **200** with a login stub, not a 4xx, so this presents as missing data. |
 | `open_times` but no `start` | No start times | Slots are generated from the request time; the server cannot replay them. |
@@ -135,5 +142,8 @@ Tests run offline against saved pages so they cannot drift as customers book:
 | `RESERVEREN _ Down the hatch.html` | Business page carrying exactly one schedule link. Protocol-relative and entity-encoded forms are covered by synthetic cases. |
 | `meeting-room.html`, `meeting-room-ajax.json` | The hourly-grid start time `'0'` inside 09:00–17:00 hours. Correct week is 23 slots; a literal reading of `0` returns none. |
 | `rental-home.html`, `rental-home-ajax.json` | Date-only unit: check-in 14:00, check-out 12:00, Sunday closed, one booking that occupies a night while leaving its check-out night free, and the merge into Monday-to-Saturday stays. |
+| `jazzercise-capacity-ajax.json` | Live public capacity response captured on 2026-09-27 for Sep 27–Oct 4: 13 classes, including simultaneous classes, varied lengths, capacities and remaining seats. |
+
+`CapacityScheduleTests` uses a compact page sample based on Jazzercise's public page, the saved response, and synthetic edge cases for full and unlimited classes, response truncation, and booking limits.
 
 Live behaviour is spot-checked separately, not asserted: `downthehatch/SLEEP` returned the documented October 22 slot on 2026-09-27 and correctly returned none on 2026-09-28 once that week booked out.
