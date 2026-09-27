@@ -51,7 +51,7 @@ Replace the command path with the absolute path to your project directory. The c
 }
 ```
 
-`through_date` is inclusive. Optional `max_results` defaults to 500; the response includes the full `count` and `truncated` flag. Optional `respect_booking_window` defaults to `true` and applies the page's minimum and maximum advance-booking limits. Set it to `false` when examining historical schedule data.
+`through_date` is inclusive. Optional `max_results` defaults to 500; the response includes the full `count` and `truncated` flag. Optional `respect_booking_window` defaults to `true` and applies the page's minimum and maximum advance-booking limits. A limit of `0` means unlimited, matching the truthiness guards in SuperSaaS's own page script, so a schedule that sets neither limit still returns future slots. Set `respect_booking_window` to `false` when examining historical schedule data.
 
 `schedule_url` may also be a third-party page. The server scans it for links to `supersaas.nl/schedule/...` or `supersaas.com/schedule/...`, including protocol-relative ones and ones inside embedded JSON, then continues from the schedule it finds and reports the origin as `linked_from`. A page that links to no schedule, or to several, is an error naming the candidates so you can pass the intended one directly. Only HTTPS URLs without credentials or custom ports are fetched, and the schedule itself must still resolve to a SuperSaaS host.
 

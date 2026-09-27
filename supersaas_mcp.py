@@ -233,8 +233,13 @@ def calculate_slots(schedule: Schedule, data: dict, start: date, stop: date,
             end_minute = minute + schedule.duration_seconds / 60
             if not any(a <= minute and end_minute <= b for a, b in _periods(schedule, day, exceptions)):
                 continue
-            if respect_booking_window and not (now_s + schedule.add_limit <= begin <= now_s + schedule.early_limit):
-                continue
+            if respect_booking_window:
+                # SuperSaaS treats a zero limit as "no limit"; see the truthiness
+                # guards around add_limit and early_limit in its own page script.
+                if schedule.add_limit and begin < now_s + schedule.add_limit:
+                    continue
+                if schedule.early_limit and begin > now_s + schedule.early_limit:
+                    continue
             if any(len(row) >= 3 and row[2] == schedule.resource_id and
                    begin < row[1] + schedule.buffer_seconds and
                    finish + schedule.buffer_seconds > row[0] for row in apps):

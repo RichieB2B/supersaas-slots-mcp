@@ -1,5 +1,6 @@
 """Run with: python3 -m unittest -v test_supersaas_mcp.py"""
 
+import dataclasses
 import importlib.util
 import json
 import pathlib
@@ -52,6 +53,19 @@ class ScheduleTests(unittest.TestCase):
         self.assertEqual(slots, [
             {"start": "2026-10-13 09:30", "end": "2026-10-13 12:30"}
         ])
+
+    def test_zero_advance_limits_mean_unbounded(self):
+        super_soon = datetime(2026, 10, 22, tzinfo=timezone.utc)
+        day = (date(2026, 10, 22), date(2026, 10, 23))
+        self.assertEqual(module.calculate_slots(self.schedule, self.data, *day, now=super_soon), [])
+        no_minimum = dataclasses.replace(self.schedule, add_limit=0)
+        self.assertEqual(module.calculate_slots(no_minimum, self.data, *day, now=super_soon),
+                         [{"start": "2026-10-22 09:30", "end": "2026-10-22 12:30"}])
+        no_maximum = dataclasses.replace(self.schedule, early_limit=0)
+        self.assertEqual(module.calculate_slots(no_maximum, self.data,
+                                                date(2026, 10, 19), date(2026, 10, 26),
+                                                now=self.now),
+                         [{"start": "2026-10-22 09:30", "end": "2026-10-22 12:30"}])
 
     def test_block_started_before_requested_week_closes_every_day(self):
         data = {"app": [], "exc": [[1802995200, 1803859170, 0]]}
