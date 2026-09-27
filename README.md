@@ -1,6 +1,6 @@
 # SuperSaaS slots MCP server
 
-<!-- mcp-name: io.github.richieb2b/supersaas-slots-mcp -->
+<!-- mcp-name: io.github.RichieB2B/supersaas-slots-mcp -->
 
 A read-only FastMCP server for public **resource** schedules with one resource and explicit numeric start times. It downloads the public schedule page, extracts `rp_id`, `token`, `bit_prefs`, `open_times`, appointment duration, buffer, and start-time constraints, then calls `/ajax/resource/<rp_id>` in 28-day windows. Each call explicitly requests the exception list with `efrom`, `eto`, and `ed=r`. No account or API key is needed for the tested public page.
 

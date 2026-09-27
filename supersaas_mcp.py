@@ -18,7 +18,7 @@ from pydantic import Field
 MAX_DAYS = 366
 CHUNK_DAYS = 28
 TIMEOUT = 20
-mcp = FastMCP("supersaas-slots", version="0.1.0")
+mcp = FastMCP("supersaas-slots", version="0.1.1")
 
 
 class ScheduleError(ValueError):

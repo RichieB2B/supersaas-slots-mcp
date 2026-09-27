@@ -9,8 +9,16 @@ import sys
 import unittest
 from datetime import date, datetime, timezone
 
+try:
+    import tomllib
+except ModuleNotFoundError:  # Python 3.10
+    import tomli as tomllib
+
 
 MODULE_PATH = pathlib.Path(__file__).with_name("supersaas_mcp.py")
+VERSION = tomllib.loads(
+    pathlib.Path(__file__).with_name("pyproject.toml").read_text()
+)["project"]["version"]
 spec = importlib.util.spec_from_file_location("supersaas_mcp", MODULE_PATH)
 module = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = module
@@ -86,7 +94,7 @@ class ScheduleTests(unittest.TestCase):
             process.stdin.flush()
             listed = exchange({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
             self.assertEqual(initialized["result"]["protocolVersion"], "2025-11-25")
-            self.assertEqual(initialized["result"]["serverInfo"]["version"], "0.1.0")
+            self.assertEqual(initialized["result"]["serverInfo"]["version"], VERSION)
             self.assertEqual(listed["result"]["tools"][0]["name"], "find_available_slots")
         finally:
             process.stdin.close()
