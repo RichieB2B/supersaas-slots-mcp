@@ -23,11 +23,18 @@ WEEKDAYS = 7
 MINUTES_PER_DAY = 1440
 SECONDS_PER_DAY = 86400
 DAILY_ROUNDING = SECONDS_PER_DAY
-SCHEDULE_HOSTS = {"supersaas.nl", "www.supersaas.nl", "supersaas.com", "www.supersaas.com"}
+SCHEDULE_TLDS = ("nl", "com")
+SCHEDULE_SUBDOMAINS = ("www", "m", "d")
+SCHEDULE_HOSTS = {"supersaas.nl", "supersaas.com"} | {
+    f"{sub}.supersaas.{tld}" for sub in SCHEDULE_SUBDOMAINS for tld in SCHEDULE_TLDS
+}
 SCHEDULE_LINK = re.compile(
-    r"(?:https?:)?//(?:www\.)?supersaas\.(?:nl|com)/schedule/[^\s\"'<>()]*", re.IGNORECASE
+    r"(?:https?:)?//(?:(?:www|m|d)\.)?supersaas\.(nl|com)(/schedule/[^\s\"'<>()?#\[]*)",
+    re.IGNORECASE,
 )
-mcp = FastMCP("supersaas-slots", version="0.2.0")
+SCHEDULE_ASSET = re.compile(r"/assets/(resource|capacity|service)-[0-9a-f]{8,}\.js")
+TRAILING_PUNCTUATION = ".,;:!?'\""
+mcp = FastMCP("supersaas-slots", version="0.2.1")
 
 
 class ScheduleError(ValueError):
@@ -93,12 +100,27 @@ def _get(url: str) -> tuple[bytes, str]:
     return data, final_url
 
 
+def _canonical_schedule_url(url: str) -> str:
+    """Reduce any SuperSaaS host to the ``www`` form and drop view parameters.
+
+    ``www``, ``m`` (mobile) and ``d`` serve the same configuration, so one
+    schedule can be written several ways. Canonicalising keeps a page that
+    links to the same schedule twice from looking ambiguous.
+    """
+    parts = urlsplit(url)
+    tld = parts.hostname.rsplit(".", 1)[1]
+    path = parts.path
+    if len(path) > len("/schedule/") and path.endswith("/"):
+        path = path.rstrip("/")
+    return f"https://www.supersaas.{tld}{path}"
+
+
 def find_schedule_links(html: str) -> tuple[str, ...]:
     """Collect distinct SuperSaaS schedule URLs mentioned in a page."""
     links = []
-    for match in SCHEDULE_LINK.findall(unescape(html)):
-        url = ("https:" + match) if match.startswith("//") else match
-        url = url.rstrip(".,;:!?'\"")
+    for tld, path in SCHEDULE_LINK.findall(unescape(html)):
+        url = _canonical_schedule_url(
+            f"https://www.supersaas.{tld.lower()}{path.rstrip(TRAILING_PUNCTUATION)}")
         if url not in links:
             links.append(url)
     return tuple(links)
@@ -113,7 +135,7 @@ def resolve_schedule_url(url: str) -> tuple[str, str | None]:
     """
     _validate_entry_url(url)
     if urlsplit(url).hostname in SCHEDULE_HOSTS:
-        return _validate_schedule_url(url), None
+        return _canonical_schedule_url(_validate_schedule_url(url)), None
     body, page_url = _get(url)
     links = find_schedule_links(body.decode("utf-8", "replace"))
     if not links:
@@ -123,7 +145,7 @@ def resolve_schedule_url(url: str) -> tuple[str, str | None]:
             "Page links to several schedules; pass the intended schedule URL directly: "
             + ", ".join(links)
         )
-    return _validate_schedule_url(links[0]), page_url
+    return _canonical_schedule_url(_validate_schedule_url(links[0])), page_url
 
 
 def load_schedule(url: str) -> tuple[Schedule, str]:
@@ -212,6 +234,15 @@ def _night_times(text: str) -> tuple[int, int]:
 
 
 def _missing_constraints_error(source: str) -> ScheduleError:
+    kinds = set(SCHEDULE_ASSET.findall(source))
+    if kinds and "resource" not in kinds:
+        label = "capacity" if "capacity" in kinds else "service"
+        what = ("seats per class or group event" if label == "capacity"
+                else "several services booked across shared staff")
+        return ScheduleError(
+            f"This is a {label} schedule, which tracks {what} through a different "
+            "endpoint than resource schedules; only resource schedules are supported."
+        )
     if not re.search(r"\bopen_times\s*=", source):
         return ScheduleError(
             "This schedule publishes no availability; SuperSaaS keeps it behind a login."
@@ -231,6 +262,11 @@ def parse_schedule(html: str, page_url: str) -> Schedule:
     rounding = re.search(r"\brounding\s*=\s*(\d+)", source)
     rounding = int(rounding.group(1)) if rounding else 0
     constraint_text = start_match.group(2)
+    if not constraint_text.strip():
+        raise ScheduleError(
+            "This resource schedule declares no start-time grid; SuperSaaS derives its "
+            "slots from the times the visitor picks, which the server cannot replay."
+        )
     starts = parse_constraints(constraint_text, rounding)
     open_match = re.search(r"\bopen_times\s*=\s*(\[[^\]]*\])", source, re.S)
     if not open_match:

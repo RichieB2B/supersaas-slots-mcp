@@ -457,5 +457,95 @@ class ResponseShapeTests(unittest.TestCase):
             self.assertNotIn(key, result)
 
 
+class HostCanonicalisationTests(unittest.TestCase):
+    SLEEP = "https://www.supersaas.nl/schedule/downthehatch/SLEEP"
+
+    def test_mobile_and_short_hosts_are_recognised_as_schedules(self):
+        for host in ("www", "m", "d"):
+            with self.subTest(host=host):
+                self.assertIn(f"{host}.supersaas.nl", module.SCHEDULE_HOSTS)
+                self.assertIn(f"{host}.supersaas.com", module.SCHEDULE_HOSTS)
+
+    def test_any_host_reduces_to_the_www_form(self):
+        cases = {
+            "https://m.supersaas.com/schedule/demo/Shop": "https://www.supersaas.com/schedule/demo/Shop",
+            "https://d.supersaas.com/schedule/demo/Shop": "https://www.supersaas.com/schedule/demo/Shop",
+            "https://supersaas.nl/schedule/downthehatch/SLEEP": self.SLEEP,
+            "https://www.supersaas.nl/schedule/downthehatch/SLEEP?view=week": self.SLEEP,
+        }
+        for url, expected in cases.items():
+            with self.subTest(url=url):
+                resolved, linked_from = module.resolve_schedule_url(url)
+                self.assertEqual(resolved, expected)
+                self.assertIsNone(linked_from)
+
+    def test_links_from_every_host_are_found_and_deduplicated(self):
+        html = (
+            '<a href="https://m.supersaas.nl/schedule/downthehatch/SLEEP">m</a>'
+            '<a href="//www.supersaas.nl/schedule/downthehatch/SLEEP?view=week">www</a>'
+            '<a href="https://d.supersaas.nl/schedule/downthehatch/SLEEP/">d</a>'
+        )
+        self.assertEqual(module.find_schedule_links(html), (self.SLEEP,))
+
+    def test_trailing_slash_does_not_make_one_schedule_look_like_two(self):
+        html = f'<a href="{self.SLEEP}">a</a><a href="{self.SLEEP}/">b</a>'
+        self.assertEqual(module.find_schedule_links(html), (self.SLEEP,))
+
+    def test_two_distinct_schedules_still_report_ambiguity(self):
+        html = ('<a href="https://m.supersaas.nl/schedule/downthehatch/SLEEP">a</a>'
+                '<a href="https://www.supersaas.com/schedule/other/SURF">b</a>')
+        with mock.patch.object(module, "_get",
+                               return_value=(html.encode(), "https://shop.example/")):
+            with self.assertRaises(module.ScheduleError) as caught:
+                module.resolve_schedule_url("https://shop.example/")
+        message = str(caught.exception)
+        self.assertIn(self.SLEEP, message)
+        self.assertIn("https://www.supersaas.com/schedule/other/SURF", message)
+
+    def test_sentence_punctuation_after_a_link_is_trimmed(self):
+        self.assertEqual(module.find_schedule_links(
+            '<p>Book at https://m.supersaas.nl/schedule/downthehatch/SLEEP.</p>'), (self.SLEEP,))
+        self.assertEqual(module.find_schedule_links(
+            f'<a href="{self.SLEEP.replace("www", "m")}">here</a>.'), (self.SLEEP,))
+
+
+class ScheduleTypeTests(unittest.TestCase):
+    URL = "https://www.supersaas.com/schedule/demo/Classes"
+    CAPACITY = ('<script src="//assets.supersaas.net/assets/capacity-'
+                '82a8c6eb1aa8b01938164e40c3a9dcb1684782bf5ea6.js"></script>'
+                "<script>var open_times=[540,540,540,540,540,540,540,1080,1080,1080,1080,1080,1080,1080],"
+                "overbooking=0,rp_name='Yoga'</script>")
+    SERVICE = ('<script src="/assets/service-0123456789abcdef0123456789abcdef.js"></script>'
+               "<script>var open_times=[540,540,540,540,540,540,540,1080,1080,1080,1080,1080,1080,1080]</script>")
+
+    def test_capacity_schedule_is_named_as_a_class_or_group_event(self):
+        with self.assertRaises(module.ScheduleError) as caught:
+            module.parse_schedule(self.CAPACITY, self.URL)
+        message = str(caught.exception)
+        self.assertIn("capacity schedule", message)
+        self.assertIn("seats per class", message)
+
+    def test_service_schedule_is_named_separately(self):
+        with self.assertRaises(module.ScheduleError) as caught:
+            module.parse_schedule(self.SERVICE, self.URL)
+        self.assertIn("service schedule", str(caught.exception))
+
+    def test_resource_asset_does_not_trigger_the_type_error(self):
+        html = ('<script src="/assets/resource-0123456789abcdef0123456789abcdef.js"></script>'
+                "<html><head><title>User Login</title></head></html>")
+        with self.assertRaises(module.ScheduleError) as caught:
+            module.parse_schedule(html, self.URL)
+        self.assertIn("behind a login", str(caught.exception))
+
+    def test_empty_start_time_grid_reports_its_own_cause(self):
+        html = ('<script src="/assets/resource-0123456789abcdef0123456789abcdef.js"></script>'
+                "<script>var open_times=[540,540,540,540,540,540,540,1080,1080,1080,1080,1080,1080,1080],"
+                "filter=9,resource[9]={data:[0,0,\"Studio\",1]},"
+                "start=precalc_constraints(''),rounding=900,default_length=3600</script>")
+        with self.assertRaises(module.ScheduleError) as caught:
+            module.parse_schedule(html, self.URL)
+        self.assertIn("no start-time grid", str(caught.exception))
+
+
 if __name__ == "__main__":
     unittest.main()

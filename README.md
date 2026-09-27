@@ -66,7 +66,7 @@ Or run it from PyPI with `uvx`:
 
 | Parameter | Default | Notes |
 | --- | --- | --- |
-| `schedule_url` | required | A SuperSaaS `/schedule/` URL, or a third-party page linking to exactly one. |
+| `schedule_url` | required | A SuperSaaS `/schedule/` URL, or a third-party page linking to exactly one. `www.`, `m.` and `d.` hosts are all accepted and reported as the canonical `www.` URL. |
 | `from_date` | required | `YYYY-MM-DD`, inclusive. |
 | `through_date` | required | `YYYY-MM-DD`, inclusive. Up to 366 days. |
 | `max_results` | `500` | Caps the returned `slots` list; `count` is always the full number. |
@@ -116,14 +116,17 @@ Every error names a cause, and most have a remedy:
 | Page asks the visitor to pick a resource | Pass one resource URL, such as `.../Meeting_Rooms/Room_1` or `.../Rental_Homes/House_1`. |
 | Page links to several schedules | The message lists them; pass the intended one directly. |
 | Schedule is kept behind a login | Nothing to do — the schedule is not public. |
-| Schedule publishes opening hours but no start times | Nothing to do — slots are generated per request, not from a fixed grid. |
+| This is a capacity schedule | Classes and group events count seats, not time slots. Nothing to do — find the resource schedule for the same business if there is one. |
+| This is a service schedule | A catalogue of services booked across shared staff. Nothing to do. |
+| Schedule declares no start-time grid | Visitors pick their own start and end times, so there is no fixed grid. Nothing to do. |
+| Schedule publishes opening hours but no start times | Nothing to do — slots are generated per request. |
 | URL is not a public SuperSaaS HTTPS page | Use `https://` with no credentials or custom port. |
 
 ## Scope
 
-Supported: public resource schedules with a single resource, fixed appointment duration, weekly opening hours with per-day exceptions and blocked ranges, booked appointments, buffer time, advance-booking limits, and both slot and night units.
+Supported: public **resource** schedules with a single resource, fixed appointment duration, weekly opening hours with per-day exceptions and blocked ranges, booked appointments, buffer time, advance-booking limits, and both slot and night units.
 
-Not modeled: scheduling plans other than the resource type, recurring rules, per-user limits, minimum-stay rules, and payment-dependent availability. An available slot is a calculated candidate, not a booking guarantee — the booking page remains authoritative at reservation time.
+SuperSaaS offers three schedule types and only resource schedules are supported; capacity and service schedules are reported as such rather than as a parse failure. Also not modeled: recurring rules, per-user limits, minimum-stay rules, and payment-dependent availability. An available slot is a calculated candidate, not a booking guarantee — the booking page remains authoritative at reservation time.
 
 ## Development
 
@@ -140,7 +143,7 @@ Releases use [PyPI Trusted Publishing](https://docs.pypi.org/trusted-publishers/
 
 1. Create a `pypi` environment in this GitHub repository and allow deployment from version tags. In PyPI, register a pending trusted publisher for owner `RichieB2B`, repository `supersaas-slots-mcp`, workflow `release.yml`, and environment `pypi`. The PyPI project does not need to exist yet.
 2. Create an `mcp-registry` GitHub environment and allow deployment from version tags. The Registry uses GitHub OIDC, so it needs no registry token.
-3. Keep the version in `pyproject.toml`, `server.json` (both version fields), and the FastMCP server constructor in sync. `check_release.py` verifies this and accepts the candidate tag with `--tag v0.2.0`. Commit the release before tagging it.
-4. Push a matching tag, for example `git tag v0.2.0 && git push origin v0.2.0`.
+3. Keep the version in `pyproject.toml`, `server.json` (both version fields), and the FastMCP server constructor in sync. `check_release.py` verifies this and accepts the candidate tag with `--tag v0.2.1`. Commit the release before tagging it.
+4. Push a matching tag, for example `git tag v0.2.1 && git push origin v0.2.1`.
 
 The [release workflow](.github/workflows/release.yml) tests and builds the distribution, publishes it to PyPI, then submits `server.json` to the MCP Registry. The [CI workflow](.github/workflows/ci.yml) runs tests and package checks on pushes and pull requests. A pushed release tag publishes externally; review its commit and environment settings first.

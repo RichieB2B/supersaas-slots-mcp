@@ -46,10 +46,24 @@ A 14- or 28-element array; the server pads to 28. For weekday `w`, the first per
 `_get()` enforces, on both the request and the response after redirects:
 
 - scheme `https`, no userinfo, port `None` or `443`;
-- final host in `SCHEDULE_HOSTS` (`supersaas.nl` / `supersaas.com`, with and without `www`) when loading a schedule;
+- final host in `SCHEDULE_HOSTS` (`supersaas.nl` / `supersaas.com`, bare and under `www.`, `m.` and `d.`) when loading a schedule;
 - at most `MAX_BYTES` (5 MB), `TIMEOUT` 20 s.
 
-`resolve_schedule_url()` accepts either a SuperSaaS URL or a third-party page. For a third-party page it scans the HTML with `SCHEDULE_LINK` for links to `/schedule/...` on the two hosts, handling protocol-relative URLs and entities via `unescape()`. Zero or several matches is an error, and the several case lists the candidates so the caller can pick.
+`resolve_schedule_url()` accepts either a SuperSaaS URL or a third-party page. For a third-party page it scans the HTML with `SCHEDULE_LINK` for links to `/schedule/...`, handling protocol-relative URLs and entities via `unescape()`. Zero or several matches is an error, and the several case lists the candidates so the caller can pick.
+
+### Host canonicalisation
+
+`www`, `m` (mobile) and `d` are mirrors: `www` and `d` return byte-identical bodies, and `m` returns a lighter page carrying the same configuration variables and the same parsed values. Every schedule URL therefore passes through `_canonical_schedule_url()`, which rewrites the host to `www.` and drops the query string and trailing slash, so the rest of the pipeline sees one shape and `schedule_url` in the response is stable.
+
+Dropping the query matters beyond tidiness: view parameters such as `?view=week` and `?m=1` are client state, and a page linking both `/SLEEP` and `/SLEEP?view=week` would otherwise look ambiguous. The same applies to `/SLEEP` versus `/SLEEP/`, which is a real pattern in the wild — SuperSaaS's own documentation prints schedule URLs both ways.
+
+`SCHEDULE_LINK` excludes `?`, `#` and `[` from the path class so the query never reaches the dedup step, and strips sentence punctuation with `TRAILING_PUNCTUATION` for bare URLs in prose.
+
+### Schedule type detection
+
+`SCHEDULE_ASSET` matches `/assets/(resource|capacity|service)-<hex>.js`, the script SuperSaaS loads per schedule type. It is the clean discriminator: capacity pages carry `overbooking`, `first_hour` and `rp_name` instead of `filter` and `resource[]`, and no `precalc_constraints` at all. The asset name is not entity-encoded, so it matches identically before and after `unescape()`.
+
+Each page references the script twice — the CDN form plus an inline `document.write` local fallback — which is why the check collects a `set`. The asset test is the **first** branch of `_missing_constraints_error()`, ahead of the missing-data checks: a capacity page does publish `open_times`, so testing for opening hours first would misreport a whole schedule type as a malformed resource schedule. Six of fourteen customer schedules sampled were capacity type.
 
 Availability is fetched from `/ajax/resource/<rp_id>` with `v=12`, `token`, `afrom`, `ato`, `ad=r`, `efrom=1970-01-01`, `eto`, `ed=r`. Requests are chunked to `CHUNK_DAYS` = 28 days, capped at `MAX_DAYS` = 366.
 
@@ -102,6 +116,8 @@ Each rejection exists because the alternative is a wrong answer rather than an e
 | --- | --- | --- |
 | `cluster`, `complex`, `sync` set | Unsupported feature | Availability depends on rules not present in the page. |
 | `filter=0` | Pick a resource | The page has no single resource to compute for. |
+| Capacity or service asset | Schedule type unsupported | Seats and shared-staff services come from a different endpoint. |
+| `precalc_constraints('')` | No start-time grid | Visitors pick their own times, so there is no fixed grid to replay. |
 | No `open_times` at all | Behind a login | SuperSaaS returns HTTP **200** with a login stub, not a 4xx, so this presents as missing data. |
 | `open_times` but no `start` | No start times | Slots are generated from the request time; the server cannot replay them. |
 | `default_length >= 86400` without `rounding=86400` | Unsupported | The containment test would match nothing and return zero slots. |
