@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+	<meta charset="utf-8">
+	
+	<title>SLEEP</title>
+	<meta name="robots" content="noindex">
+	<link rel="stylesheet" href="//assets.supersaas.net/assets/schedule_theme_5-67d7b2cfca5aafd648b01fd202bd2ce4df97726631b624a4ba83108423ea869b.css" />
+		<script src="//assets.supersaas.net/assets/resource-890a7bda4d9f68cb1c2acb06c4aff3448891488d2e0f682e868e72c7c0365ca9.js"></script>
+<script>if (typeof(showflags)=='undefined') document.write('<script src="/assets/resource-890a7bda4d9f68cb1c2acb06c4aff3448891488d2e0f682e868e72c7c0365ca9.js"><\/script>')</script>
+
+<link rel="icon" href="https://cdn.supersaas.net/favicon.ico"><style>
+:root{--c8:#497AE4;--c10:#4476E4;}
+</style>  <style>
+					:root{--s1:#FFFFFF;--s2:#097826;--s3:#000000;}
+  </style>
+</head>
+<body>
+<div class="header custom_logo hide_all"><div class="logo_w"><img src="//assets.supersaas.net/l194870_62.jpg" id="logo" alt="Logo"></div><ul class="topmenu"><li><a href="/schedule/login/downthehatch/SLEEP?after=%2Fschedule%2Fdownthehatch%2FSLEEP%3Fview%3Dagenda">Inloggen</a></li> <li onclick="showflags(194870)" id="flgs"><img title="Verander taal" srcset="//cdn.supersaas.net/flags/nl@2x.png 2x" src="//cdn.supersaas.net/flags/nl.png" alt="Flag"><div id="flagbox" style="display:none">…</div></li> <li><a href="/schedule/help/downthehatch/SLEEP?context=index&amp;return=%2Fschedule%2Fdownthehatch%2FSLEEP%3Fview%3Dagenda">Help</a></li></ul></div>
+<noscript><div class="c"><b>Let op:</b> Deze website werkt alleen als JavaScript is ingeschakeld op uw browser!</div></noscript>
+	<div style="clear:both"></div>
+<div id="wrap-schedule" class="wrap-resource">
+	<div id="usc"></div>
+	<div id="intro">
+		
+		<h1>SLEEP</h1>
+		<div id="message_box" data-user>
+				<div><p><span style="color:#000000"><strong>Kies het gewenste tijdslot / Choose your timeslot<br></strong><em>Blauwe blokken zijn geboekt, blue spots are booked already<br><br></em></span><span style="color:#000000">DOOR EEN RESERVERING TE PLAATSEN GA JE AKKOORD MET ONZE <a href="https://www.down-the-hatch.nl/algemene-voorwaarden/">ALGEMENE VOORWAARDEN</a>.</span></p>
+<p><span style="color:#000000">BY MAKING A RESERVATION YOU AGREE TO OUR <a href="https://www.down-the-hatch.nl/algemene-voorwaarden/">TERMS &amp; CONDITIONS</a><br><br>Booking must be paid to confirm your booking.</span></p></div>
+				
+			
+			<p class="flash"><span id="flash" style="display:none"></span></p>
+		</div>
+	</div>
+	
+	<div id="monthnav"></div>
+	<div id="tabContainer"></div>
+	<div id="agenda">
+		<i id="spin"></i><div id="noroom" style="display:none"></div><div id="viewholder"></div>
+	</div>
+</div>
+
+
+	<div class="dbox-w" id="oldres" style="display:none" role="dialog">
+		<div class="dbox-h dialoghead">
+			<span tabindex="-1">
+				<span id="oldres_edit">Reservering wijzigen</span>
+				<span id="oldres_view" style="display:none">Reservering bekijken</span>
+			</span>
+			<a href="javascript:void(0)" onclick="hideDialog('oldres')" class="if if-times" aria-label="Close"></a>
+		</div>
+		<form action="/schedule/downthehatch/SLEEP?view=agenda" accept-charset="UTF-8" method="post">
+			<div id="oldres_error"></div>
+
+			<div class="dbox-c">
+					<div class="dbox-form-c" >
+			<div>
+				<label for="oldres_start_time" title="Tijdstip" class="fancy-label"><i class="if if-clock"></i><span>Tijdstip</span></label>
+				<div>
+					<span class="dt-tm">
+						<input size="18" onfocus="show_datepick(this,0)" onblur="hide_datepick(this, false, true)" autocomplete="off" class="fancy-field" type="text" name="oldres[start_time]" id="oldres_start_time" />
+						<span id="oldres_startm" class="g"></span>
+					</span>
+					<label for="oldres_finish_time">tot</label>
+					<span class="dt-tm">
+						<input size="20" class="ro fancy-field" readonly="readonly" type="text" name="oldres[finish_time]" id="oldres_finish_time" />
+						<span id="oldres_finishm" class="g"></span>
+					</span>
+				</div>
+			</div>
+
+		<div id="oldres_resr" style="display:none"><i class="if if-link" title="Dienst"></i><div id="oldres_res"></div></div>
+
+		
+		<div><label for="oldres_full_name" class="fancy-label rq"><i class="if if-user" title="Naam"></i><span>Naam</span></label><div><input size="30" maxlength="50" required="required" placeholder="Naam *" class="fancy-field" type="text" name="oldres[full_name]" id="oldres_full_name" /></div></div>
+		<div><label for="oldres_email" class="fancy-label rq"><i class="if if-email" title="E-mail"></i><span>E-mail</span></label><div><input size="30" maxlength="50" required="required" placeholder="E-mail *" class="fancy-field" type="text" name="oldres[email]" id="oldres_email" /></div></div>
+		
+		<div><label for="oldres_mobile" class="fancy-label rq"><i class="if if-mobile" title="Mobiel"></i><span>Mobiel</span></label><div><input size="30" maxlength="31" required="required" placeholder="Mobiel *" class="fancy-field" type="tel" name="oldres[mobile]" id="oldres_mobile" /></div></div>
+		<div><label for="oldres_address" class="fancy-label rq"><i class="if if-address" title="Adres"></i><span>Adres</span></label><div><textarea rows="3" cols="40" required="required" placeholder="Adres *" class="fancy-field" name="oldres[address]" id="oldres_address">
+</textarea></div></div>
+		<div class="fancy-select-wrap">
+        <label for="oldres_country" class="fancy-label"><i class="if if-globe" title="Land"></i><span>Land</span></label>
+        <span><select onfocus="build_clist(this)" id="oldres_country" name="oldres[country]" class="fancy-select"><option value="" selected="selected" class="c_repl">&nbsp; &nbsp; &nbsp;</option></select></span>
+      </div>
+	</div>
+
+	<div class="dbox-form-c form-custom">
+	
+	
+	<div><label for="oldres_field_1_r">Kortingscode / Cadeaubon</label><div><input size="30" maxlength="255" onchange="reprice(this.id)" class="coupon" type="text" name="oldres[field_1_r]" id="oldres_field_1_r" /></div></div>
+	<div class="rq"><label for="oldres_field_2_r">Aantal spelers / # of players?</label><div><select onchange="reprice(this.id)" name="oldres[field_2_r]" id="oldres_field_2_r"><option value="2">2</option>
+<option value="3">3</option>
+<option value="4">4</option>
+<option value="5">5</option></select></div></div>
+
+
+
+		<input type="hidden" name="oldres[resource_id]" id="oldres_resource_id" />
+
+
+		<div class='coupon_line' style='display: none;'><span><span class="label">Korting</span></span><span></span></div>
+
+		<div id="oldres_statrow" style="display:none">
+				<span class="label">
+						Status
+				</span>
+			<span id="oldres_status"></span>
+		</div>
+		<div>
+			<div id="oldrescreated_by" class="small full-width"><span>Gemaakt op</span> <span id="oldres_created_by"></span></div>
+			<div id="oldresupdated_by" class="small full-width" style="display:none"><span>Gewijzigd op</span> <span id="oldres_updated_by"></span></div>
+		</div>
+	</div>
+
+
+				<div class="dbox-form-c"><div class="id-wrap"><label for="oldres_id">ID</label><input type="text" name="oldres[id]" id="oldres_id" /></div></div>
+
+				<div class="dbox-download">
+					<i class="id id-form" title="Formulier bekijken" id="form_icon" onclick="jump_to_form(true)"  style="display:none"></i>
+								<i class="id id-formadd" title="Formulier toevoegen" id="form_plus" onclick="jump_to_form(true)" ></i>
+				</div>
+			</div>
+
+			<div class="dbox-f">
+				<span id="oldres_editlink">
+					<button name="edit" type="submit" id="oldres_sedit" onclick="return showIndicator(this)" class="bttn">Reservering aanpassen</button>
+					<button name="destroy" type="submit" id="oldres_sdestroy" onclick="return removeRes(this)" class="bttn i-trash-w sq"><span>Reservering verwijderen</span></button>
+				</span>
+				<a href="javascript:void(0)" onclick="hideDialog('oldres');" class="l-c">Sluiten</a>
+				<span class="spin" style="display:none"></span>
+			</div>
+
+			<input type="hidden" name="oldres[xpos]" id="oldres_xpos" />
+			<input type="hidden" name="oldres[ypos]" id="oldres_ypos" />
+</form>	</div>
+
+
+
+	<div class="dbox-w" id="reservation" style="display:none" role="dialog">
+		<div class="dbox-h dialoghead">
+			<span class="res_title" tabindex="-1">Reservering toevoegen</span>
+			<a href="javascript:void(0)" onclick="hideDialog('reservation')" class="if if-times" aria-label="Close"></a>
+		</div>
+		<form action="/schedule/downthehatch/SLEEP?view=agenda" accept-charset="UTF-8" method="post">
+			<div id="reservation_error" class="dbox-error"></div>
+			<div class="dbox-c">
+						<div class="dbox-form-c" >
+			<div>
+				<label for="reservation_start_time" title="Tijdstip" class="fancy-label"><i class="if if-clock"></i><span>Tijdstip</span></label>
+				<div>
+					<span class="dt-tm">
+						<input size="18" onfocus="show_datepick(this,0)" onblur="hide_datepick(this, false, true)" autocomplete="off" class="fancy-field" type="text" name="reservation[start_time]" id="reservation_start_time" />
+						<span id="reservation_startm" class="g"></span>
+					</span>
+					<label for="reservation_finish_time">tot</label>
+					<span class="dt-tm">
+						<input size="20" class="ro fancy-field" readonly="readonly" type="text" name="reservation[finish_time]" id="reservation_finish_time" />
+						<span id="reservation_finishm" class="g"></span>
+					</span>
+				</div>
+			</div>
+
+		
+
+		
+		<div><label for="reservation_full_name" class="fancy-label rq"><i class="if if-user" title="Naam"></i><span>Naam</span></label><div><input size="30" maxlength="50" required="required" placeholder="Naam *" class="fancy-field" type="text" name="reservation[full_name]" id="reservation_full_name" /></div></div>
+		<div><label for="reservation_email" class="fancy-label rq"><i class="if if-email" title="E-mail"></i><span>E-mail</span></label><div><input size="30" maxlength="50" required="required" placeholder="E-mail *" class="fancy-field" type="text" name="reservation[email]" id="reservation_email" /></div></div>
+		
+		<div><label for="reservation_mobile" class="fancy-label rq"><i class="if if-mobile" title="Mobiel"></i><span>Mobiel</span></label><div><input size="30" maxlength="31" required="required" placeholder="Mobiel *" class="fancy-field" type="tel" name="reservation[mobile]" id="reservation_mobile" /></div></div>
+		<div><label for="reservation_address" class="fancy-label rq"><i class="if if-address" title="Adres"></i><span>Adres</span></label><div><textarea rows="3" cols="40" required="required" placeholder="Adres *" class="fancy-field" name="reservation[address]" id="reservation_address">
+</textarea></div></div>
+		<div class="fancy-select-wrap">
+        <label for="reservation_country" class="fancy-label"><i class="if if-globe" title="Land"></i><span>Land</span></label>
+        <span><select onfocus="build_clist(this)" id="reservation_country" name="reservation[country]" class="fancy-select"><option value="NL" selected="selected" class="c_repl">Netherlands</option></select></span>
+      </div>
+	</div>
+
+	<div class="dbox-form-c form-custom">
+	
+	
+	<div><label for="reservation_field_1_r">Kortingscode / Cadeaubon</label><div><input size="30" maxlength="255" onchange="reprice(this.id)" class="coupon" type="text" name="reservation[field_1_r]" id="reservation_field_1_r" /></div></div>
+	<div class="rq"><label for="reservation_field_2_r">Aantal spelers / # of players?</label><div><select onchange="reprice(this.id)" name="reservation[field_2_r]" id="reservation_field_2_r"><option value="2">2</option>
+<option value="3">3</option>
+<option value="4">4</option>
+<option value="5">5</option></select></div></div>
+
+
+
+		<input type="hidden" value="1197733" name="reservation[resource_id]" id="reservation_resource_id" />
+
+
+		<div class='coupon_line' style='display: none;'><span><span class="label">Korting</span></span><span></span></div>
+
+	</div>
+
+
+										<div class="dbox-f">
+					<span>
+						<span class="spin" id="reservation_progress" style="display:none"></span>
+					</span>
+					<span>
+						<a href="javascript:void(0)" onclick="hideDialog('reservation');" class="bttn-ghost">Annuleren</a>
+						<button name="button" type="submit" onclick="return showIndicator(this)" class="bttn">Maak reservering</button>
+					</span>
+				</div>
+			</div>
+
+			<input type="hidden" name="reservation[xpos]" id="reservation_xpos" />
+			<input type="hidden" name="reservation[ypos]" id="reservation_ypos" />
+</form>	</div>
+
+
+
+<div id="pickholder"></div>
+<script src="//cdn.supersaas.net/js/lang/nl167.js"></script>
+<script>
+  var form_id = false;
+  var cursor=new Date(Date.UTC(2026,8,28,0)),rp_id=823084,token=1017954,view='week',auth_write=true,date_format=2,time_format=0,week_start=1,rounding=1800,default_length=10800,role=0,currency="€ ",price_format=1,time_here=new Date/1000-1790467543,local=false
+resource[1197733]={data:[0,0,"SLEEP",0]}
+var filter=1197733,start=precalc_constraints('570 810 1110'),time_select=false,theme=5,orig_url="/schedule/downthehatch/SLEEP"
+  var from_utc = [1806195600,7200,1792890000,3600,1774746000,7200,1761440400,3600,1743296400,7200];
+  hotcell= 0
+  var chip_fields = ["full_name","email","mobile","address","country","field_1_r","field_2_r","form_id"]
+  var app=[[1790587800,1790598600,1197733],[1790760600,1790771400,1197733],[1790775000,1790785800,1197733],[1790793000,1790803800,1197733],[1790847000,1790857800,1197733],[1790861400,1790872200,1197733],[1790879400,1790890200,1197733],[1790933400,1790944200,1197733],[1790947800,1790958600,1197733],[1790965800,1790976600,1197733],[1791019800,1791030600,1197733],[1791034200,1791045000,1197733],[1791052200,1791063000,1197733],[1791106200,1791117000,1197733],[1791120600,1791131400,1197733],[1791138600,1791149400,1197733],[1791365400,1791376200,1197733],[1791379800,1791390600,1197733],[1791397800,1791408600,1197733],[1791466200,1791477000,1197733],[1791484200,1791495000,1197733],[1791538200,1791549000,1197733],[1791552600,1791563400,1197733],[1791570600,1791581400,1197733],[1791624600,1791635400,1197733],[1791639000,1791649800,1197733],[1791657000,1791667800,1197733],[1791711000,1791721800,1197733],[1791725400,1791736200,1197733],[1791743400,1791754200,1197733]]
+</script>
+
+<script>
+  var add_limit = 86400, early_limit = 18316800, early_snap = 0
+  var rp_name = "SLEEP", buffer = 30, unit_length = 60, int_chk = 2
+  var sync = false
+  var first_hour = 9, last_hour = 22, season = [0,0]
+  var bit_prefs = 1275068537, open_times = [570,570,570,570,570,570,570,1320,1320,750,1320,1320,1320,1320,null,null,840,null,null,null,null,null,null,960], cluster = 0, complex = 0
+  var ecache = {data: [[1790553600,1790639970,1,570,780],[1791849600,1791935970,1,570,750]]}
+  var default_view = 1, time_unit = "minuten", theme = 5, hide_finish = 0
+  var mdir = 0, grid_color = 1, full_color = 0
+  var hide_closed = 0, color_head = 0, month_nav = false
+  var mheight = 28, w_line_height = 32, interval = 2
+  var search_depth = 420, automes= "Klik op een beschikbare plek om een nieuwe reservering te maken. ";
+    document.observe('dom:loaded', domloaded)
+</script>
+
+
+<script src="//cdn.supersaas.net/js/countries6/nl.js"></script><script>window.update_c || document.write('<script src="/javascripts/countries/nl.js"><\/script>')</script>
+</body>
+</html>

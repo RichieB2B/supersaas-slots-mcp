@@ -1,0 +1,51 @@
+# SuperSaaS slots MCP server
+
+A read-only, dependency-free Python MCP server for public **resource** schedules with one resource and explicit numeric start times. It downloads the public schedule page, extracts `rp_id`, `token`, `bit_prefs`, `open_times`, appointment duration, buffer, and start-time constraints, then calls `/ajax/resource/<rp_id>` in 28-day windows. No account or API key is needed for the tested public page.
+
+## Connect
+
+Use Python 3.10+ and configure a stdio MCP server in your MCP client:
+
+```json
+{
+  "mcpServers": {
+    "supersaas-slots": {
+      "command": "python3",
+      "args": ["/Users/richard/Documents/Codex/2026-09-27/th/outputs/supersaas-mcp/supersaas_mcp.py"]
+    }
+  }
+}
+```
+
+The client must allow this local process to make HTTPS requests to `www.supersaas.nl` (or `www.supersaas.com`). The server writes MCP JSON-RPC to stdout and diagnostics to stderr.
+
+## Tool
+
+`find_available_slots` accepts:
+
+```json
+{
+  "schedule_url": "https://www.supersaas.nl/schedule/downthehatch/SLEEP",
+  "from_date": "2026-10-19",
+  "through_date": "2026-10-25"
+}
+```
+
+`through_date` is inclusive. Optional `max_results` defaults to 500; the response includes the full `count` and `truncated` flag. Optional `respect_booking_window` defaults to `true` and applies the page's minimum and maximum advance-booking limits. Set it to `false` when examining historical schedule data.
+
+Times are returned as schedule wall-clock strings (`YYYY-MM-DD HH:MM`). The schedule's numeric appointment and exception epochs are interpreted as UTC, matching the tested page. The server refreshes the page and AJAX data on each call, so results can change as bookings are made.
+
+For the saved October fixture, the week of October 19 has one free slot: **October 22, 09:30–12:30**. Monday is closed by the low seven bits of `bit_prefs` (`0b1111001`, Sunday first). The October 13 Tuesday exception opens 09:30–12:30.
+
+## Scope
+
+This server handles the tested resource-schedule shape: one resource, fixed duration, up to two daily opening periods, explicit numeric start times, weekday enable bits, one opening-hours exception per day, booked appointments, and buffer time. It rejects schedules advertising clustering, synchronization, or complex linked rules. Other SuperSaaS schedule types, recurring rule patterns, per-user limits, and payment-dependent availability are not modeled. An available slot is a calculated candidate, not a booking guarantee; the booking page remains authoritative at reservation time.
+
+## Test
+
+```sh
+cd /Users/richard/Documents/Codex/2026-09-27/th/outputs/supersaas-mcp
+python3 -m unittest -v test_supersaas_mcp.py
+```
+
+The tests use the included copies of your example files. A live read-only call against the example schedule also returned the expected October 22 slot on 2026-09-27.
