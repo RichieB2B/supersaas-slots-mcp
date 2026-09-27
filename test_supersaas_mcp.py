@@ -8,6 +8,7 @@ import subprocess
 import sys
 import unittest
 from datetime import date, datetime, timezone
+from unittest import mock
 
 try:
     import tomllib
@@ -101,6 +102,78 @@ class ScheduleTests(unittest.TestCase):
             process.wait(timeout=10)
             process.stdout.close()
             process.stderr.close()
+
+
+class LinkedPageTests(unittest.TestCase):
+    PAGE_URL = "https://www.down-the-hatch.nl/reserveren/"
+    SCHEDULE_URL = "https://www.supersaas.nl/schedule/downthehatch/SLEEP"
+
+    @classmethod
+    def setUpClass(cls):
+        cls.page = (FIXTURES / "RESERVEREN _ Down the hatch.html").read_bytes()
+
+    def test_finds_the_single_schedule_link_on_a_business_page(self):
+        self.assertEqual(module.find_schedule_links(self.page.decode()), (self.SCHEDULE_URL,))
+
+    def test_resolve_follows_the_link_found_on_the_page(self):
+        with mock.patch.object(module, "_get", return_value=(self.page, self.PAGE_URL)) as get:
+            self.assertEqual(module.resolve_schedule_url(self.PAGE_URL),
+                             (self.SCHEDULE_URL, self.PAGE_URL))
+        get.assert_called_once_with(self.PAGE_URL)
+
+    def test_resolve_uses_a_schedule_url_without_fetching_a_page(self):
+        with mock.patch.object(module, "_get", side_effect=AssertionError("fetched")) as get:
+            self.assertEqual(module.resolve_schedule_url(self.SCHEDULE_URL),
+                             (self.SCHEDULE_URL, None))
+        get.assert_not_called()
+
+    def test_resolve_rejects_pages_without_ambiguous_or_missing_links(self):
+        cases = {
+            "<p>Bel ons</p>": "No link",
+            f'<a href="{self.SCHEDULE_URL}">a</a>'
+            f'<a href="https://www.supersaas.com/schedule/other/SURF">b</a>': "several",
+        }
+        for html, expected in cases.items():
+            with self.subTest(html=html):
+                with mock.patch.object(module, "_get", return_value=(html.encode(), self.PAGE_URL)):
+                    with self.assertRaises(module.ScheduleError) as caught:
+                        module.resolve_schedule_url(self.PAGE_URL)
+                self.assertIn(expected, str(caught.exception))
+
+    def test_resolve_normalises_protocol_relative_links(self):
+        html = '<a href="//www.supersaas.nl/schedule/downthehatch/SLEEP">b</a>'
+        with mock.patch.object(module, "_get", return_value=(html.encode(), self.PAGE_URL)):
+            self.assertEqual(module.resolve_schedule_url(self.PAGE_URL)[0], self.SCHEDULE_URL)
+
+    def test_entry_urls_must_be_plain_https(self):
+        for url in ("http://www.down-the-hatch.nl/reserveren/",
+                    "https://user:pass@www.down-the-hatch.nl/reserveren/",
+                    "https://www.down-the-hatch.nl:8443/reserveren/",
+                    "ftp://www.down-the-hatch.nl/reserveren/"):
+            with self.subTest(url=url):
+                with mock.patch.object(module, "_get", side_effect=AssertionError("fetched")):
+                    with self.assertRaises(module.ScheduleError):
+                        module.resolve_schedule_url(url)
+
+    def test_links_pointing_off_domain_are_rejected(self):
+        html = '<a href="https://evil.example/schedule/downthehatch/SLEEP">b</a>'
+        with mock.patch.object(module, "_get", return_value=(html.encode(), self.PAGE_URL)):
+            with self.assertRaises(module.ScheduleError):
+                module.resolve_schedule_url(self.PAGE_URL)
+
+    def test_fetch_failures_become_schedule_errors(self):
+        with mock.patch.object(module, "urlopen", side_effect=OSError("403 Forbidden")):
+            with self.assertRaises(module.ScheduleError) as caught:
+                module.resolve_schedule_url(self.PAGE_URL)
+        self.assertIn("Could not fetch", str(caught.exception))
+
+    def test_load_schedule_reads_the_linked_page_as_a_schedule(self):
+        with mock.patch.object(module, "_get",
+                               return_value=((FIXTURES / "SLEEP.html").read_bytes(),
+                                             self.SCHEDULE_URL)):
+            schedule, final_url = module.load_schedule(self.SCHEDULE_URL)
+        self.assertEqual(final_url, self.SCHEDULE_URL)
+        self.assertEqual(schedule.rp_id, 823084)
 
 
 if __name__ == "__main__":

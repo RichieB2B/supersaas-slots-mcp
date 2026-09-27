@@ -18,7 +18,12 @@ from pydantic import Field
 MAX_DAYS = 366
 CHUNK_DAYS = 28
 TIMEOUT = 20
-mcp = FastMCP("supersaas-slots", version="0.1.1")
+MAX_BYTES = 5_000_000
+SCHEDULE_HOSTS = {"supersaas.nl", "www.supersaas.nl", "supersaas.com", "www.supersaas.com"}
+SCHEDULE_LINK = re.compile(
+    r"(?:https?:)?//(?:www\.)?supersaas\.(?:nl|com)/schedule/[^\s\"'<>()]*", re.IGNORECASE
+)
+mcp = FastMCP("supersaas-slots", version="0.1.2")
 
 
 class ScheduleError(ValueError):
@@ -47,12 +52,19 @@ def _number(source: str, name: str) -> int:
     return int(match.group(1))
 
 
-def _validate_url(url: str) -> str:
+def _validate_entry_url(url: str) -> str:
     parts = urlsplit(url)
-    if (parts.scheme != "https" or parts.hostname not in
-            {"supersaas.nl", "www.supersaas.nl", "supersaas.com", "www.supersaas.com"}
-            or parts.username or parts.password or parts.port not in (None, 443)):
-        raise ScheduleError("Use a public HTTPS schedule URL on supersaas.nl or supersaas.com.")
+    if (parts.scheme != "https" or not parts.hostname or parts.username
+            or parts.password or parts.port not in (None, 443)):
+        raise ScheduleError("Use a public HTTPS URL without credentials or a custom port.")
+    return url
+
+
+def _validate_schedule_url(url: str) -> str:
+    _validate_entry_url(url)
+    parts = urlsplit(url)
+    if parts.hostname not in SCHEDULE_HOSTS:
+        raise ScheduleError("Schedule pages live on supersaas.nl or supersaas.com.")
     if not parts.path.startswith("/schedule/"):
         raise ScheduleError("URL must point to a SuperSaaS /schedule/ page.")
     return url
@@ -60,21 +72,63 @@ def _validate_url(url: str) -> str:
 
 def _get(url: str) -> tuple[bytes, str]:
     req = Request(url, headers={"User-Agent": "supersaas-slots-mcp/0.1", "Accept": "text/html, application/json"})
-    with urlopen(req, timeout=TIMEOUT) as response:
-        final_url = response.geturl()
-        final = urlsplit(final_url)
-        if final.scheme != "https" or final.hostname not in {
-            "supersaas.nl", "www.supersaas.nl", "supersaas.com", "www.supersaas.com"
-        }:
-            raise ScheduleError("SuperSaaS redirected to an unexpected host.")
-        data = response.read(5_000_001)
-    if len(data) > 5_000_000:
-        raise ScheduleError("SuperSaaS response exceeded 5 MB.")
+    try:
+        with urlopen(req, timeout=TIMEOUT) as response:
+            final_url = response.geturl()
+            final = urlsplit(final_url)
+            if final.scheme != "https" or final.username or final.password or final.port not in (None, 443):
+                raise ScheduleError("The page redirected to an unsafe URL.")
+            data = response.read(MAX_BYTES + 1)
+    except OSError as exc:
+        raise ScheduleError(f"Could not fetch {url}: {exc}") from exc
+    if len(data) > MAX_BYTES:
+        raise ScheduleError(f"Response exceeded {MAX_BYTES // 1000000} MB.")
     return data, final_url
 
 
+def find_schedule_links(html: str) -> tuple[str, ...]:
+    """Collect distinct SuperSaaS schedule URLs mentioned in a page."""
+    links = []
+    for match in SCHEDULE_LINK.findall(unescape(html)):
+        url = ("https:" + match) if match.startswith("//") else match
+        url = url.rstrip(".,;:!?'\"")
+        if url not in links:
+            links.append(url)
+    return tuple(links)
+
+
+def resolve_schedule_url(url: str) -> tuple[str, str | None]:
+    """Return the schedule URL for a SuperSaaS or third-party page.
+
+    Third-party pages such as a salon website are fetched and scanned for a
+    link to a SuperSaaS schedule. The second result is that page's URL when a
+    link was followed, otherwise ``None``.
+    """
+    _validate_entry_url(url)
+    if urlsplit(url).hostname in SCHEDULE_HOSTS:
+        return _validate_schedule_url(url), None
+    body, page_url = _get(url)
+    links = find_schedule_links(body.decode("utf-8", "replace"))
+    if not links:
+        raise ScheduleError("No link to a supersaas.nl or supersaas.com /schedule/ page here.")
+    if len(links) > 1:
+        raise ScheduleError(
+            "Page links to several schedules; pass the intended schedule URL directly: "
+            + ", ".join(links)
+        )
+    return _validate_schedule_url(links[0]), page_url
+
+
+def load_schedule(url: str) -> tuple[Schedule, str]:
+    _validate_schedule_url(url)
+    body, final_url = _get(url)
+    if urlsplit(final_url).hostname not in SCHEDULE_HOSTS:
+        raise ScheduleError("SuperSaaS redirected to an unexpected host.")
+    return parse_schedule(body.decode("utf-8"), final_url), final_url
+
+
 def parse_schedule(html: str, page_url: str) -> Schedule:
-    _validate_url(page_url)
+    _validate_schedule_url(page_url)
     source = unescape(html)
     start_match = re.search(r"\bstart\s*=\s*precalc_constraints\(\s*(['\"])(.*?)\1\s*\)", source, re.S)
     if not start_match or not re.fullmatch(r"\s*\d+(?:[\s,]+\d+)*\s*", start_match.group(2)):
@@ -195,7 +249,9 @@ def calculate_slots(schedule: Schedule, data: dict, start: date, stop: date,
 
 @mcp.tool(annotations={"readOnlyHint": True, "openWorldHint": True})
 def find_available_slots(
-    schedule_url: Annotated[str, Field(description="Public HTTPS SuperSaaS /schedule/ URL")],
+    schedule_url: Annotated[str, Field(
+        description="Public HTTPS SuperSaaS /schedule/ URL, or a business page linking to one"
+    )],
     from_date: Annotated[str, Field(description="First date, YYYY-MM-DD")],
     through_date: Annotated[str, Field(description="Last date, inclusive, YYYY-MM-DD")],
     max_results: Annotated[int, Field(description="Maximum number of slots returned", ge=1, le=2000)] = 500,
@@ -203,11 +259,12 @@ def find_available_slots(
 ) -> dict:
     """List available slots in a public, single-resource SuperSaaS schedule.
 
-    Supports explicit numeric start times, fixed duration, weekly opening
-    hours, exceptions, booked appointments, and booking-window limits.
-    Unsupported schedule rules are reported as errors.
+    Accepts a SuperSaaS schedule URL directly, or any public HTTPS page that
+    links to exactly one schedule on supersaas.nl or supersaas.com, such as a
+    salon's own booking page. Supports explicit numeric start times, fixed
+    duration, weekly opening hours, exceptions, booked appointments, and
+    booking-window limits. Unsupported schedule rules are reported as errors.
     """
-    _validate_url(schedule_url)
     try:
         start = date.fromisoformat(from_date)
         through = date.fromisoformat(through_date)
@@ -219,8 +276,8 @@ def find_available_slots(
         raise ScheduleError(f"Date range must contain 1 to {MAX_DAYS} days.")
     if type(max_results) is not int or not 1 <= max_results <= 2000:
         raise ScheduleError("max_results must be an integer from 1 to 2000.")
-    html, final_url = _get(schedule_url)
-    schedule = parse_schedule(html.decode("utf-8"), final_url)
+    resolved_url, linked_from = resolve_schedule_url(schedule_url)
+    schedule, final_url = load_schedule(resolved_url)
     all_slots = []
     cursor = start
     now = datetime.now(timezone.utc)
@@ -241,6 +298,8 @@ def find_available_slots(
         "count": len(all_slots), "truncated": len(all_slots) > max_results,
         "slots": all_slots[:max_results],
     }
+    if linked_from:
+        result["linked_from"] = linked_from
     return result
 
 

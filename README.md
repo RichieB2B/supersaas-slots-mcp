@@ -2,7 +2,7 @@
 
 <!-- mcp-name: io.github.RichieB2B/supersaas-slots-mcp -->
 
-A read-only FastMCP server for public **resource** schedules with one resource and explicit numeric start times. It downloads the public schedule page, extracts `rp_id`, `token`, `bit_prefs`, `open_times`, appointment duration, buffer, and start-time constraints, then calls `/ajax/resource/<rp_id>` in 28-day windows. Each call explicitly requests the exception list with `efrom`, `eto`, and `ed=r`. No account or API key is needed for the tested public page.
+A read-only FastMCP server for public **resource** schedules with one resource and explicit numeric start times. Give it either a SuperSaaS schedule URL or a business page that links to one, such as `https://www.down-the-hatch.nl/reserveren/`. It downloads the page, extracts `rp_id`, `token`, `bit_prefs`, `open_times`, appointment duration, buffer, and start-time constraints, then calls `/ajax/resource/<rp_id>` in 28-day windows. Each call explicitly requests the exception list with `efrom`, `eto`, and `ed=r`. No account or API key is needed for the tested public page.
 
 Licensed under the [MIT License](LICENSE).
 
@@ -52,6 +52,8 @@ Replace the command path with the absolute path to your project directory. The c
 ```
 
 `through_date` is inclusive. Optional `max_results` defaults to 500; the response includes the full `count` and `truncated` flag. Optional `respect_booking_window` defaults to `true` and applies the page's minimum and maximum advance-booking limits. Set it to `false` when examining historical schedule data.
+
+`schedule_url` may also be a third-party page. The server scans it for links to `supersaas.nl/schedule/...` or `supersaas.com/schedule/...`, including protocol-relative ones and ones inside embedded JSON, then continues from the schedule it finds and reports the origin as `linked_from`. A page that links to no schedule, or to several, is an error naming the candidates so you can pass the intended one directly. Only HTTPS URLs without credentials or custom ports are fetched, and the schedule itself must still resolve to a SuperSaaS host.
 
 Times are returned as schedule wall-clock strings (`YYYY-MM-DD HH:MM`). The schedule's numeric appointment and exception epochs are interpreted as UTC, matching the tested page. The server refreshes the page and AJAX data on each call, so results can change as bookings are made.
 
