@@ -46,7 +46,7 @@ A 14- or 28-element array; the server pads to 28. For weekday `w`, the first per
 `_get()` enforces, on both the request and the response after redirects:
 
 - scheme `https`, no userinfo, port `None` or `443`;
-- final host in `SCHEDULE_HOSTS` (`supersaas.nl` / `supersaas.com`, bare and under `www.`, `m.` and `d.`) when loading a schedule;
+- final host in `SCHEDULE_HOSTS` (`supersaas.nl`, `supersaas.com` and `supersaas.co.uk`, bare and under `www.`, `m.` and `d.`) when loading a schedule;
 - at most `MAX_BYTES` (5 MB), `TIMEOUT` 20 s.
 
 `resolve_schedule_url()` accepts either a SuperSaaS URL or a third-party page. For a third-party page it scans the HTML with `SCHEDULE_LINK` for links to `/schedule/...`, handling protocol-relative URLs and entities via `unescape()`. Zero or several matches is an error, and the several case lists the candidates so the caller can pick.
@@ -66,6 +66,12 @@ The widget endpoint itself is deliberately not supported. `https://www.supersaas
 ### Host canonicalisation
 
 `www`, `m` (mobile) and `d` are mirrors: `www` and `d` return byte-identical bodies, and `m` returns a lighter page carrying the same configuration variables and the same parsed values. Every schedule URL therefore passes through `_canonical_schedule_url()`, which rewrites the host to `www.` and drops the query string and trailing slash, so the rest of the pipeline sees one shape and `schedule_url` in the response is stable.
+
+**The domain suffix is preserved, not collapsed.** `supersaas.nl`, `supersaas.com` and `supersaas.co.uk` are true mirrors of the same account — `CTSC/Court_Bookings` returns byte-identical bodies on all three, with the same `rp_id` and `token` — so any of them works. Collapsing to one preferred host would be a free optimisation today, but it would rewrite the URL the caller asked about, and a page linking both forms would stop reporting which one the business actually publishes. So `https://www.supersaas.co.uk/schedule/x/y` and its `.com` twin stay distinct, and a page linking both produces the "several schedules" error listing both; either choice then works.
+
+Because `co.uk` is two labels, the suffix is whatever follows the `supersaas.` prefix rather than the last dot-separated label. Splitting on the last dot yields `uk` and produces the malformed host `www.supersaas.uk`; the prefix is stripped with `str.partition`, which also copes with the `www.`-prefixed form. `SCHEDULE_LINK` and `SCHEDULE_HOSTS` are both derived from one `SCHEDULE_SUFFIXES` tuple, and the alternation is sorted longest-first so `co.uk` cannot be truncated to `com`. A test asserts the tool docstring names every suffix, so the literal in it cannot drift from the tuple.
+
+Beware when comparing pages across hosts or across time: SuperSaaS embeds per-request values (`time_here`, `ecache`, `gcache`). Two fetches of the *same* URL can differ by a byte or two, so hash equality is not a mirror test — strip those before concluding anything. The verified result above came from diffing rendered lines, which showed zero differences.
 
 Dropping the query matters beyond tidiness: view parameters such as `?view=week` and `?m=1` are client state, and a page linking both `/SLEEP` and `/SLEEP?view=week` would otherwise look ambiguous. The same applies to `/SLEEP` versus `/SLEEP/`, which is a real pattern in the wild — SuperSaaS's own documentation prints schedule URLs both ways.
 
@@ -156,6 +162,7 @@ Tests run offline against saved pages so they cannot drift as customers book:
 | `RESERVEREN _ Down the hatch.html` | Business page carrying exactly one schedule link. Protocol-relative and entity-encoded forms are covered by synthetic cases. |
 | `meeting-room.html`, `meeting-room-ajax.json` | The hourly-grid start time `'0'` inside 09:00–17:00 hours. Correct week is 23 slots; a literal reading of `0` returns none. |
 | `rental-home.html`, `rental-home-ajax.json` | Date-only unit: check-in 14:00, check-out 12:00, Sunday closed, one booking that occupies a night while leaving its check-out night free, and the merge into Monday-to-Saturday stays. |
+| `paddock-cook.html`, `paddock-cook-ajax.json` | A `supersaas.co.uk` resource schedule: two-part suffix kept through canonicalisation, half-hour grid `' -30 0'` yielding 30-minute slots, no advance limits, empty `app` and `exc` so the 80-slot result is exact. |
 | `jazzercise-capacity-ajax.json` | Live public capacity response captured on 2026-09-27 for Sep 27–Oct 4: 13 classes, including simultaneous classes, varied lengths, capacities and remaining seats. |
 
 `CapacityScheduleTests` uses a compact page sample based on Jazzercise's public page, the saved response, and synthetic edge cases for full and unlimited classes, response truncation, and booking limits.

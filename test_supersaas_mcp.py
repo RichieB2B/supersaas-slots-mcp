@@ -621,21 +621,25 @@ class CapacityScheduleTests(unittest.TestCase):
 
 class HostCanonicalisationTests(unittest.TestCase):
     SLEEP = "https://www.supersaas.nl/schedule/downthehatch/SLEEP"
+    UK = "https://www.supersaas.co.uk/schedule/aerial_life/aerial_classes"
 
-    def test_mobile_and_short_hosts_are_recognised_as_schedules(self):
-        for host in ("www", "m", "d"):
-            with self.subTest(host=host):
-                self.assertIn(f"{host}.supersaas.nl", module.SCHEDULE_HOSTS)
-                self.assertIn(f"{host}.supersaas.com", module.SCHEDULE_HOSTS)
+    def test_every_suffix_is_known_with_and_without_a_subdomain(self):
+        expected = set()
+        for suffix in module.SCHEDULE_SUFFIXES:
+            expected.add(f"supersaas.{suffix}")
+            for sub in module.SCHEDULE_SUBDOMAINS:
+                expected.add(f"{sub}.supersaas.{suffix}")
+        self.assertEqual(module.SCHEDULE_HOSTS, expected)
+        self.assertIn("co.uk", module.SCHEDULE_SUFFIXES)
 
-    def test_any_host_reduces_to_the_www_form(self):
-        cases = {
-            "https://m.supersaas.com/schedule/demo/Shop": "https://www.supersaas.com/schedule/demo/Shop",
-            "https://d.supersaas.com/schedule/demo/Shop": "https://www.supersaas.com/schedule/demo/Shop",
-            "https://supersaas.nl/schedule/downthehatch/SLEEP": self.SLEEP,
-            "https://www.supersaas.nl/schedule/downthehatch/SLEEP?view=week": self.SLEEP,
-        }
-        for url, expected in cases.items():
+    def test_a_two_part_suffix_survives_canonicalisation(self):
+        for url, expected in {
+            "https://m.supersaas.co.uk/schedule/aerial_life/aerial_classes": self.UK,
+            "https://d.supersaas.co.uk/schedule/aerial_life/aerial_classes/": self.UK,
+            "https://supersaas.co.uk/schedule/aerial_life/aerial_classes?view=week": self.UK,
+            "https://www.supersaas.com/schedule/demo/Shop": "https://www.supersaas.com/schedule/demo/Shop",
+            self.SLEEP: self.SLEEP,
+        }.items():
             with self.subTest(url=url):
                 resolved, linked_from = module.resolve_schedule_url(url)
                 self.assertEqual(resolved, expected)
@@ -649,9 +653,52 @@ class HostCanonicalisationTests(unittest.TestCase):
         )
         self.assertEqual(module.find_schedule_links(html), (self.SLEEP,))
 
+    def test_a_co_uk_link_is_found_on_a_business_page(self):
+        for form in (f'<a href="{self.UK}">b</a>',
+                     '<a href="//m.supersaas.co.uk/schedule/aerial_life/aerial_classes">b</a>',
+                     f'<p>Book at {self.UK}.</p>'):
+            with self.subTest(form=form):
+                self.assertEqual(module.find_schedule_links(form), (self.UK,))
+
+    def test_equivalent_schedules_on_different_suffixes_are_not_collapsed(self):
+        html = (f'<a href="{self.UK}">uk</a>'
+                '<a href="https://www.supersaas.com/schedule/aerial_life/aerial_classes">com</a>')
+        self.assertEqual(len(module.find_schedule_links(html)), 2)
+
     def test_trailing_slash_does_not_make_one_schedule_look_like_two(self):
         html = f'<a href="{self.SLEEP}">a</a><a href="{self.SLEEP}/">b</a>'
         self.assertEqual(module.find_schedule_links(html), (self.SLEEP,))
+
+    def test_mobile_and_short_hosts_are_recognised_as_schedules(self):
+        for host in ("www", "m", "d"):
+            with self.subTest(host=host):
+                self.assertIn(f"{host}.supersaas.nl", module.SCHEDULE_HOSTS)
+                self.assertIn(f"{host}.supersaas.com", module.SCHEDULE_HOSTS)
+
+    def test_lookalike_hosts_are_not_ours(self):
+        for host in ("supersaas.it", "supersaas.co.uk.example.com", "supersaasco.uk",
+                     "www.supersaas.co.uk.evil.example", "notsupersaas.co.uk"):
+            with self.subTest(host=host):
+                self.assertNotIn(host, module.SCHEDULE_HOSTS)
+                with self.assertRaises(module.ScheduleError):
+                    module._validate_schedule_url(f"https://{host}/schedule/x/y")
+
+    def test_an_unknown_host_is_scanned_as_a_business_page_not_a_schedule(self):
+        html = '<a href="https://www.supersaas.co.uk/schedule/aerial_life/aerial_classes">b</a>'
+        with mock.patch.object(module, "_get",
+                               return_value=(html.encode(), "https://club.example/")) as get:
+            self.assertEqual(module.resolve_schedule_url("https://club.example/"),
+                             (self.UK, "https://club.example/"))
+        get.assert_called_once_with("https://club.example/")
+
+    def test_host_messages_and_docstring_list_every_suffix(self):
+        with self.assertRaises(module.ScheduleError) as caught:
+            module._validate_schedule_url("https://www.example.com/schedule/x")
+        for suffix in module.SCHEDULE_SUFFIXES:
+            self.assertIn(f"supersaas.{suffix}", str(caught.exception))
+        docstring = module.find_available_slots.__doc__
+        for suffix in module.SCHEDULE_SUFFIXES:
+            self.assertIn(f"supersaas.{suffix}", docstring)
 
     def test_two_distinct_schedules_still_report_ambiguity(self):
         html = ('<a href="https://m.supersaas.nl/schedule/downthehatch/SLEEP">a</a>'
@@ -706,6 +753,37 @@ class ScheduleTypeTests(unittest.TestCase):
         with self.assertRaises(module.ScheduleError) as caught:
             module.parse_schedule(html, self.URL)
         self.assertIn("no start-time grid", str(caught.exception))
+
+
+class PaddockCookTests(unittest.TestCase):
+    """A live ``supersaas.co.uk`` resource schedule, saved offline."""
+
+    URL = "https://www.supersaas.co.uk/schedule/northcaninecentre/Paddock_Bookings"
+
+    @classmethod
+    def setUpClass(cls):
+        cls.schedule = module.parse_schedule(
+            (FIXTURES / "paddock-cook.html").read_text(errors="replace"), cls.URL)
+        cls.data = json.loads((FIXTURES / "paddock-cook-ajax.json").read_text())
+        cls.now = datetime(2026, 10, 4, tzinfo=timezone.utc)
+
+    def test_two_part_suffix_url_is_accepted_and_kept(self):
+        self.assertEqual(self.schedule.page_url, self.URL)
+        self.assertEqual(self.schedule.resource_id, 646955)
+        self.assertEqual(self.schedule.rp_id, 444117)
+
+    def test_ajax_url_keeps_the_co_uk_host(self):
+        self.assertTrue(module.ajax_url(self.schedule, date(2026, 10, 5), date(2026, 10, 9))
+                        .startswith("https://www.supersaas.co.uk/ajax/resource/444117?"))
+
+    def test_half_hour_grid_yields_thirty_minute_slots(self):
+        self.assertEqual(self.schedule.starts[0], tuple(range(0, 1440, 30)))
+        self.assertEqual(self.schedule.duration_seconds, 1800)
+        slots = module.calculate_slots(self.schedule, self.data,
+                                       date(2026, 10, 5), date(2026, 10, 9), now=self.now)
+        self.assertEqual(len(slots), 80)
+        self.assertEqual(slots[0], {"start": "2026-10-05 09:00", "end": "2026-10-05 09:30"})
+        self.assertEqual({slot["start"][11:] for slot in slots} & {"09:15"}, set())
 
 
 if __name__ == "__main__":

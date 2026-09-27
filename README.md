@@ -37,7 +37,7 @@ Configure a stdio MCP server in your MCP client:
 }
 ```
 
-Replace the command path with the absolute path to your project directory. The client must allow this local process to make HTTPS requests to `www.supersaas.nl` (or `www.supersaas.com`).
+Replace the command path with the absolute path to your project directory. The client must allow this local process to make HTTPS requests to `www.supersaas.nl`, `www.supersaas.com` and `www.supersaas.co.uk`.
 
 Or run it from PyPI with `uvx`:
 
@@ -66,7 +66,7 @@ Or run it from PyPI with `uvx`:
 
 | Parameter | Default | Notes |
 | --- | --- | --- |
-| `schedule_url` | required | A SuperSaaS `/schedule/` URL, or a third-party page linking to exactly one. `www.`, `m.` and `d.` hosts are all accepted and reported as the canonical `www.` URL. |
+| `schedule_url` | required | A SuperSaaS `/schedule/` URL on `supersaas.nl`, `supersaas.com` or `supersaas.co.uk`, or a third-party page linking to exactly one. `www.`, `m.` and `d.` hosts are all accepted and reported as the canonical `www.` URL. |
 | `from_date` | required | `YYYY-MM-DD`, inclusive. |
 | `through_date` | required | `YYYY-MM-DD`, inclusive. Up to 366 days. |
 | `max_results` | `500` | Caps the returned `slots` list; `count` is always the full number. |
@@ -165,7 +165,7 @@ Releases use [PyPI Trusted Publishing](https://docs.pypi.org/trusted-publishers/
 
 1. Create a `pypi` environment in this GitHub repository and allow deployment from version tags. In PyPI, register a pending trusted publisher for owner `RichieB2B`, repository `supersaas-slots-mcp`, workflow `release.yml`, and environment `pypi`. The PyPI project does not need to exist yet.
 2. Create an `mcp-registry` GitHub environment and allow deployment from version tags. The Registry uses GitHub OIDC, so it needs no registry token.
-3. Keep the version in `pyproject.toml`, `server.json` (both version fields), and the FastMCP server constructor in sync. `check_release.py` verifies this and accepts the candidate tag with `--tag v0.3.0`. Commit the release before tagging it.
-4. Push a matching tag, for example `git tag v0.3.0 && git push origin v0.3.0`.
+3. Keep the version in `pyproject.toml`, `server.json` (both version fields), and the FastMCP server constructor in sync. `check_release.py` verifies this and accepts the candidate tag with `--tag v0.3.1`. Commit the release before tagging it.
+4. Push a matching tag, for example `git tag v0.3.1 && git push origin v0.3.1`.
 
 The [release workflow](.github/workflows/release.yml) tests and builds the distribution, publishes it to PyPI, then submits `server.json` to the MCP Registry. The [CI workflow](.github/workflows/ci.yml) runs tests and package checks on pushes and pull requests. A pushed release tag publishes externally; review its commit and environment settings first.

@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	
+	<title>PAWSOME PADDOCK bookings</title>
+	<meta name="robots" content="noindex">
+	<link rel="stylesheet" href="//assets.supersaas.net/assets/schedule_theme_4-ee282d192f1f99909718e759ed0aca6a6fdaeb0fb944ba7ee6d2c6befc8804d0.css" />
+		<script src="//assets.supersaas.net/assets/resource-c78296690e1ede6fc11f78f0ed782d48da63d39157ec588e53b4473d04862149.js"></script>
+<script>if (typeof(showflags)=='undefined') document.write('<script src="/assets/resource-c78296690e1ede6fc11f78f0ed782d48da63d39157ec588e53b4473d04862149.js"><\/script>')</script>
+
+<link rel="icon" href="https://cdn.supersaas.net/favicon.ico"><style>
+h1,h2,h5,caption,.hid2,.tx1{color:#076DAF}
+.bg1{background-color:#076DAF}
+:root{--c1:#076DAF;}
+</style></head>
+<body>
+<div class="header default_logo"><div class="logo_w"><div id="head"><a href="/" id="logo_24" aria-label="Logo"></a></div></div><ul class="topmenu"><li><a href="/schedule/login/northcaninecentre/Paddock_Bookings?after=%2Fschedule%2Fnorthcaninecentre%2FPaddock_Bookings">Sign in</a></li> <li><a href="/schedule/help/northcaninecentre/Paddock_Bookings?context=index&amp;return=%2Fschedule%2Fnorthcaninecentre%2FPaddock_Bookings">Help</a></li></ul></div>
+<noscript><div class="c"><b>Warning:</b> You will need to enable JavaScript on your browser for this web site to work!</div></noscript>
+	<div class="breadcrumb">&nbsp;</div>
+<div id="wrap-schedule" class="wrap-resource">
+	<div id="usc"></div>
+	<div id="intro">
+		
+		<h1>PAWSOME PADDOCK bookings</h1>
+		<div id="message_box" data-user>
+				<div><p>Welcome to Northumberland Canine Centre PAWSOME PADDOCK booking system. Hopefully you will find the process easy.</p>
+<ul>
+<li>You will first need to register your details. This is a one-off registration.</li>
+<li>Book your required time slot(s). This can be changed or deleted if you make a mistake, or you wish to cancel.</li>
+<li>Your booking will be emailed to us immediately </li>
+<li>The code for the Paddock gate will be emailed to you</li>
+<li>Please note; as we are a training centre and the paddock is regularly used for classes, we cannot accept bitches in season.</li>
+</ul>
+<p style="text-align:center">Bookings charges are as follows;    1- 2 dogs  1 hour...........£12   30 mins.........£7                                       Additional dogs...... £2 per dog per booking  </p>
+<p style="text-align:center">Booking times include change over time. Please respect the next customer coming in.</p>
+<p><span style="text-decoration:underline">PAYMENT</span>     Bank Transfer; Northumberland Canine Centre</p>
+<p>            30-90-13   00440804   Ref; SURNAME + PADDOCK</p>
+<p style="text-align:center"> </p>
+<p>                 For cash payment please hand in to the arena when possible. If there is no one there, please place your payment into the mailbox <strong><em>inside</em></strong> the Paddock. Payment should be put in an envelope with details of your name and booking time clearly marked on the outside. NO loose money.</p>
+<p>Failure to attend will still incur the cost unless booking is cancelled 24hrs before.</p>
+<p>If you are having problems booking, please contact Jacquie on 07813 912889</p></div>
+				
+			
+			<p class="flash"><span id="flash" style="display:none"></span></p>
+		</div>
+	</div>
+	
+	<div id="monthnav"></div>
+	<div id="tabContainer"></div>
+	<div id="agenda">
+		<i id="spin"></i><div id="noroom" style="display:none"></div><div id="viewholder"></div>
+	</div>
+</div>
+
+<div class="dialogwindow dwrap_n" id="oldres" style="display:none" role="dialog">
+	<span class="dhead_n"><span class="dialoghead" tabindex="-1"><span id="oldres_edit">Edit Reservation</span><span id="oldres_view" style="display:none">View Reservation</span></span> <a href="javascript:void(0)" onclick="hideDialog('oldres')" class="i i-x" aria-label="Close"></a></span>
+	<div class="dbox_n">
+		<form action="/schedule/northcaninecentre/Paddock_Bookings" accept-charset="UTF-8" method="post">
+			<div id="oldres_error"></div>
+			<table class="first_label">
+						<tr class="t">
+			<td><label for="oldres_start_time">When</label></td>
+			<td>
+				<table>
+					<tr>
+						<td><input size="20" onfocus="show_datepick(this,0)" onblur="hide_datepick(this, false, true)" autocomplete="off" type="text" name="oldres[start_time]" id="oldres_start_time" /><div id="oldres_startm" class="g"></div></td>
+						<td><label for="oldres_finish_time">to</label></td>
+						<td><input size="20" onfocus="show_datepick(this,0)" onblur="hide_datepick(this, 1800)" autocomplete="off" type="text" name="oldres[finish_time]" id="oldres_finish_time" /><div id="oldres_finishm" class="g"></div></td>
+					</tr>
+				</table>
+			</td>
+		</tr>
+	<tr id="oldres_resr" style="display:none"><td>Description</td><td id="oldres_res"></td></tr>
+	
+	<tr class="rq"><td><label for="oldres_full_name">Full name</label></td><td><input size="30" maxlength="50" required="required" type="text" name="oldres[full_name]" id="oldres_full_name" /></td></tr>
+	
+	<tr><td><label for="oldres_phone">Phone</label></td><td><input size="30" maxlength="31" type="text" name="oldres[phone]" id="oldres_phone" /></td></tr>
+	
+	
+	
+	
+	
+	<tr class="rq"><td><label for="oldres_field_1_r">Number of dogs</label></td><td><select onchange=" reprice(this.id)" name="oldres[field_1_r]" id="oldres_field_1_r"><option value="1">1</option>
+<option value="2">2</option>
+<option value="3">3</option>
+<option value="4">4</option>
+<option value="5">5</option>
+<option value="6">6</option>
+<option value="More than 6">More than 6</option></select></td></tr>
+	
+		<tr style="display:none"><td colspan="2"><input type="hidden" name="oldres[resource_id]" id="oldres_resource_id" /></td></tr>
+		<tr id="oldres_req"><td colspan="2" class="rt small">* Indicates required field</td></tr>
+			<tr id="oldres_repeat" >
+				<td><label for="oldres_repeater">Repeat</label></td>
+				<td>
+					<table>
+						<tr>
+							<td><select onchange="showuntil(this)" name="oldres[repeater]" id="oldres_repeater"><option value="0">None</option>
+<option value="1">Daily</option>
+<option value="2">Weekly</option>
+<option value="3">Bi-weekly</option>
+<option value="4">Monthly by date</option>
+<option value="5">Monthly by day</option></select></td>
+							<td id="oldres_until" style="display:none;padding:0 4px"><label for="oldres_until_time">until</label></td>
+							<td id="oldres_until2" style="display:none"><input size="18" style="text-align:center" onfocus="show_datepick(this,0)" onblur="hide_datepick()" autocomplete="off" type="text" name="oldres[until_time]" id="oldres_until_time" /></td>
+						</tr>
+					</table>
+				</td>
+			</tr>
+				<tr id="oldres_changeS" style="display:none"><td>Change</td><td class="s"><label><input type="radio" value="0" name="oldres[change]" id="oldres_change_0" />this one </label> <label><input type="radio" value="1" name="oldres[change]" id="oldres_change_1" />this and following </label></td></tr>
+		<tr id="oldres_statrow" style="display:none">
+			<td>
+					Status
+			</td>
+			<td id="oldres_status"></td>
+		</tr>
+		<tr id="oldrescreated_by" class="small"><td>Created on</td><td id="oldres_created_by"></td></tr>
+		<tr id="oldresupdated_by" class="small" style="display:none"><td>Updated on</td><td id="oldres_updated_by"></td></tr>
+
+				
+			</table>
+			<div class="dbtn_w">
+				<div class="dbtn_i">
+					<i class="id id-ical" title="Download reservation as iCalendar file" onclick="download_ical('oldres')"></i>
+				</div>
+				<div class="dbtn_n dbtn_n_e bttn-dbox-ft">
+					<span id="oldres_editlink"><input type="hidden" name="oldres[id]" id="oldres_id" />
+						<button name="edit" type="submit" id="oldres_sedit" onclick="return showIndicator(this)" class="bttn">Update reservation</button>
+						<button name="destroy" type="submit" id="oldres_sdestroy" onclick="return removeRes(this)" class="bttn i-trash-w sq"><span>Delete reservation</span></button>
+					</span>
+					<a href="javascript:void(0)" onclick="hideDialog('oldres');" class="l-c">Close</a><input type="hidden" name="oldres[xpos]" id="oldres_xpos" /><input type="hidden" name="oldres[ypos]" id="oldres_ypos" />
+					<div class="spin_w"><div class="spin il" id="oldres_progress" style="display:none"></div></div>
+				</div>
+			</div>
+</form>	</div>
+</div>
+
+<div class="dialogwindow dwrap_n" id="reservation" style="display:none" role="dialog">
+	<span class="dhead_n"><span class="dialoghead res_title" tabindex="-1">New Reservation</span> <a href="javascript:void(0)" onclick="hideDialog('reservation')" class="i i-x" aria-label="Close"></a></span>
+	<div class="dbox_n">
+		<form action="/schedule/northcaninecentre/Paddock_Bookings" accept-charset="UTF-8" method="post">
+			<div id="reservation_error"></div>
+				<div class="c c_n">
+					To add reservations, please <a href="/schedule/login/northcaninecentre/Paddock_Bookings?after=%2Fschedule%2Fnorthcaninecentre%2FPaddock_Bookings">sign in</a>. 
+				</div>
+				<div class="dbtn_n">
+					<a href="javascript:void(0)" onclick="hideDialog('reservation');" class="l-c">Cancel</a><input type="hidden" name="reservation[xpos]" id="reservation_xpos" /><input type="hidden" name="reservation[ypos]" id="reservation_ypos" />
+				</div>
+</form>	</div>
+</div>
+
+
+<div id="pickholder"></div>
+
+<script>
+  
+  var cursor=new Date(Date.UTC(2026,8,27,0)),rp_id=444117,token=747054,view='week',auth_write=false,date_format=2,time_format=0,week_start=0,rounding=1800,default_length=1800,role=0,currency="£ ",price_format=0,time_here=new Date/1000-1790548234,local=false
+resource[646955]={data:[0,0,"Paddock_Bookings",0]}
+var filter=646955,start=precalc_constraints(' -30 0'),time_select=false,theme=4,orig_url="/schedule/northcaninecentre/Paddock_Bookings"
+  var from_utc = [1806195600,3600,1792890000,0,1774746000,3600,1761440400,0,1743296400,3600];
+  hotcell= 0
+  var chip_fields = ["full_name","phone","field_1_r"]
+  var app=[[1788076800,1788116400,646955,119168198,0,0,0,false,"Sharon Dunn"],[1788346800,1788350400,646955,119385543,0,0,0,false,"Matthew Davies"],[1788436800,1788462000,646955,118624047,0,0,0,false,"Sharon Dunn"],[1788530400,1788532200,646955,119476913,0,0,0,false,"Rona Malessa"],[1788604200,1788606000,646955,119495123,0,0,0,false,"Kylie Scrafton"],[1788624000,1788625800,646955,119499722,0,0,0,false,"Rona Malessa"],[1788625800,1788627600,646955,119499729,0,0,0,false,"Rona Malessa"],[1788633000,1788634800,646955,119502230,0,0,0,false,"Tracey Chaplin"],[1788688800,1788690600,646955,119502373,0,0,0,false,"Sharron Currie"],[1788714000,1788715800,646955,119503230,0,0,0,false,"Lindsey Robinson"],[1788777000,1788778800,646955,119526858,0,0,0,false,"Matthew Davies"],[1788778800,1788780600,646955,119526474,0,0,0,false,"Sharron Currie"],[1788865200,1788867000,646955,119553305,0,0,0,false,"Sharron Currie"],[1788944400,1788946200,646955,119601366,0,0,0,false,"Sharron Currie"],[1788946200,1788948000,646955,119601449,0,0,0,false,"Sharron Currie"],[1789038000,1789041600,646955,119640062,0,0,0,false,"Sharron Currie"],[1789041600,1789066800,646955,118624068,0,0,0,false,"Sharon Dunn"],[1789137000,1789138800,646955,119682025,0,0,0,false,"Sharron Currie"],[1789295400,1789297200,646955,119661555,0,0,0,false,"Lauren Haikney"],[1789297200,1789318800,646955,119712043,0,0,0,false,"Sharon Dunn"],[1789318800,1789320600,646955,119088355,0,0,0,false,"Tracey Chaplin"],[1789401600,1789403400,646955,119749002,0,0,0,false,"Sharron Currie"],[1789403400,1789405200,646955,119749385,0,0,0,false,"Sharon Dunn"],[1789405200,1789407000,646955,119749393,0,0,0,false,"Sharon Dunn"],[1789407000,1789408800,646955,119749412,0,0,0,false,"Sharon Dunn"],[1789408800,1789410600,646955,119749424,0,0,0,false,"Sharon Dunn"],[1789410600,1789412400,646955,119749434,0,0,0,false,"Sharon Dunn"],[1789551000,1789552800,646955,119790746,0,0,0,false,"Shelley Allsopp"],[1789552800,1789554600,646955,119807723,0,0,0,false,"Shelley Allsopp"],[1789563600,1789585200,646955,119815906,0,0,0,false,"Sharon Dunn"],[1789646400,1789671600,646955,119815713,0,0,0,false,"Sharon Dunn"],[1789722000,1789723800,646955,119861195,0,0,0,false,"Nick Wilson"],[1789810200,1789812000,646955,119861695,0,0,0,false,"Shelley Allsopp"],[1789842600,1789844400,646955,119913579,0,0,0,false,"Tracey Chaplin"],[1789894800,1789898400,646955,119914584,0,0,0,false,"Jamie Carlisle"],[1789902000,1789903800,646955,119915294,0,0,0,false,"Bethany Jade Thomas"],[1789905600,1789909200,646955,119882928,0,0,0,false,"kay kirkup"],[1789999200,1790001000,646955,119943027,0,0,0,false,"Rona Malessa"],[1790002800,1790017200,646955,119949318,0,0,0,false,"Sharon Dunn"],[1790078400,1790082000,646955,119883072,0,0,0,false,"kay kirkup"],[1790089200,1790091000,646955,119986938,0,0,0,false,"Rona Malessa"],[1790157600,1790161200,646955,120007721,0,0,0,false,"Jamie Carlisle"],[1790164800,1790166600,646955,120021194,0,0,0,false,"Sharron Currie"],[1790242200,1790244000,646955,120050682,0,0,0,false,"Rona Malessa"],[1790245800,1790247600,646955,120048649,0,0,0,false,"Nick Wilson"],[1790262000,1790263800,646955,120059326,0,0,0,false,"Sharron Currie"],[1790443800,1790445600,646955,120114466,0,0,0,false,"Tracey Chaplin"],[1790503200,1790505000,646955,120115622,0,0,0,false,"Lauren Haikney"]]
+</script>
+
+<script>
+  var add_limit = 0, early_limit = 0, early_snap = 0
+  var rp_name = "Paddock_Bookings", buffer = 0, unit_length = 60, int_chk = 2
+  var sync = false
+  var first_hour = 8, last_hour = 19, season = [0,0]
+  var bit_prefs = 2080374911, open_times = [540,540,540,540,540,540,540,1140,1140,1140,1140,1140,1140,1140,null,870,null,960,720,null,810,null,990,null,null,null,null,1050], cluster = 0, complex = 0
+  var ecache = {data: []}
+  var default_view = 1, time_unit = "minutes", theme = 4, hide_finish = 0
+  var mdir = 0, grid_color = 0, full_color = 0
+  var hide_closed = 0, color_head = 0, month_nav = true
+  var mheight = 82, w_line_height = 52, interval = 2
+  var search_depth = 40, automes= "To add reservations, please \u003ca href=\"/schedule/login/northcaninecentre/Paddock_Bookings?after=%2Fschedule%2Fnorthcaninecentre%2FPaddock_Bookings\"\u003esign in\u003c/a\u003e. ";
+    document.observe('dom:loaded', domloaded)
+</script>
+
+
+
+</body>
+</html>

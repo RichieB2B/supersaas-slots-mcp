@@ -23,20 +23,28 @@ WEEKDAYS = 7
 MINUTES_PER_DAY = 1440
 SECONDS_PER_DAY = 86400
 DAILY_ROUNDING = SECONDS_PER_DAY
-SCHEDULE_TLDS = ("nl", "com")
+HOST_PREFIX = "supersaas."
+SCHEDULE_SUFFIXES = ("nl", "com", "co.uk")
 SCHEDULE_SUBDOMAINS = ("www", "m", "d")
-SCHEDULE_HOSTS = {"supersaas.nl", "supersaas.com"} | {
-    f"{sub}.supersaas.{tld}" for sub in SCHEDULE_SUBDOMAINS for tld in SCHEDULE_TLDS
+SCHEDULE_HOSTS = {f"{HOST_PREFIX}{suffix}" for suffix in SCHEDULE_SUFFIXES} | {
+    f"{sub}.{HOST_PREFIX}{suffix}"
+    for sub in SCHEDULE_SUBDOMAINS for suffix in SCHEDULE_SUFFIXES
 }
+SCHEDULE_DOMAINS = ", ".join(f"{HOST_PREFIX}{s}" for s in SCHEDULE_SUFFIXES[:-1]) + \
+    f" or {HOST_PREFIX}{SCHEDULE_SUFFIXES[-1]}"
+# Longest suffix first, so ``co.uk`` is not truncated to ``com`` or ``uk``.
+SUFFIX_ALTERNATION = "|".join(re.escape(s) for s in sorted(SCHEDULE_SUFFIXES, key=len, reverse=True))
+SUBDOMAIN_ALTERNATION = "|".join(SCHEDULE_SUBDOMAINS)
 SCHEDULE_LINK = re.compile(
-    r"(?:https?:)?//(?:(?:www|m|d)\.)?supersaas\.(nl|com)(/schedule/[^\s\"'<>()?#\[]*)",
+    r"(?:https?:)?//(?:(?:" + SUBDOMAIN_ALTERNATION + r")\.)?" + re.escape(HOST_PREFIX)
+    + r"(" + SUFFIX_ALTERNATION + r")(/schedule/[^\s\"'<>()?#\[]*)",
     re.IGNORECASE,
 )
 SCHEDULE_ASSET = re.compile(r"/assets/(resource|capacity|service)-[0-9a-f]{8,}\.js")
 TRAILING_PUNCTUATION = ".,;:!?'\""
 SCRIPT_SRC = re.compile(r"<script\b[^>]*?\bsrc\s*=\s*(['\"])(.+?)\1", re.IGNORECASE | re.DOTALL)
 MAX_SCRIPTS = 10
-mcp = FastMCP("supersaas-slots", version="0.3.0")
+mcp = FastMCP("supersaas-slots", version="0.3.1")
 
 
 class ScheduleError(ValueError):
@@ -90,7 +98,7 @@ def _validate_schedule_url(url: str) -> str:
     _validate_entry_url(url)
     parts = urlsplit(url)
     if parts.hostname not in SCHEDULE_HOSTS:
-        raise ScheduleError("Schedule pages live on supersaas.nl or supersaas.com.")
+        raise ScheduleError(f"Schedule pages live on {SCHEDULE_DOMAINS}.")
     if not parts.path.startswith("/schedule/"):
         raise ScheduleError("URL must point to a SuperSaaS /schedule/ page.")
     return url
@@ -120,22 +128,24 @@ def _canonical_schedule_url(url: str) -> str:
 
     ``www``, ``m`` (mobile) and ``d`` serve the same configuration, so one
     schedule can be written several ways. Canonicalising keeps a page that
-    links to the same schedule twice from looking ambiguous.
+    links to the same schedule twice from looking ambiguous. The suffix is
+    whatever follows the host prefix, not the last dot-separated label, because
+    ``co.uk`` is two of them.
     """
     parts = urlsplit(url)
-    tld = parts.hostname.rsplit(".", 1)[1]
+    suffix = parts.hostname.lower().partition(HOST_PREFIX)[2]
     path = parts.path
     if len(path) > len("/schedule/") and path.endswith("/"):
         path = path.rstrip("/")
-    return f"https://www.supersaas.{tld}{path}"
+    return f"https://www.{HOST_PREFIX}{suffix}{path}"
 
 
 def find_schedule_links(html: str) -> tuple[str, ...]:
     """Collect distinct SuperSaaS schedule URLs mentioned in a page."""
     links = []
-    for tld, path in SCHEDULE_LINK.findall(unescape(html)):
+    for suffix, path in SCHEDULE_LINK.findall(unescape(html)):
         url = _canonical_schedule_url(
-            f"https://www.supersaas.{tld.lower()}{path.rstrip(TRAILING_PUNCTUATION)}")
+            f"https://www.{HOST_PREFIX}{suffix.lower()}{path.rstrip(TRAILING_PUNCTUATION)}")
         if url not in links:
             links.append(url)
     return tuple(links)
@@ -192,7 +202,7 @@ def resolve_schedule_url(url: str) -> tuple[str, str | None]:
     text = body.decode("utf-8", "replace")
     links = find_schedule_links(text) or links_from_scripts(text, page_url)
     if not links:
-        raise ScheduleError("No link to a supersaas.nl or supersaas.com /schedule/ page here.")
+        raise ScheduleError(f"No link to a {SCHEDULE_DOMAINS} /schedule/ page here.")
     if len(links) > 1:
         raise ScheduleError(
             "Page links to several schedules; pass the intended schedule URL directly: "
@@ -587,14 +597,14 @@ def find_available_slots(
     """List available slots in a public SuperSaaS resource or capacity schedule.
 
     Accepts a SuperSaaS schedule URL directly, or any public HTTPS page that
-    links to exactly one schedule on supersaas.nl or supersaas.com, such as a
-    salon's own booking page. Supports explicit, repeating-grid, and per-weekday
-    start times, fixed duration, weekly opening hours, exceptions, booked
-    appointments, buffer time, and booking-window limits. Capacity schedules
-    list classes with remaining seats, their titles, locations, and counts. Date-only schedules
-    such as nightly rentals report whole nights from check-in to check-out and
-    add a `stays` summary of merged consecutive nights. Unsupported schedule
-    rules are reported as errors.
+    links to exactly one schedule on supersaas.nl, supersaas.com or
+    supersaas.co.uk, such as a salon's own booking page. Supports explicit,
+    repeating-grid, and per-weekday start times, fixed duration, weekly opening
+    hours, exceptions, booked appointments, buffer time, and booking-window
+    limits. Capacity schedules list classes with remaining seats, their titles,
+    locations, and counts. Date-only schedules such as nightly rentals report
+    whole nights from check-in to check-out and add a `stays` summary of merged
+    consecutive nights. Unsupported schedule rules are reported as errors.
     """
     try:
         start = date.fromisoformat(from_date)
